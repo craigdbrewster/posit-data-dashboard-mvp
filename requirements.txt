@@ -2,3 +2,4 @@ shiny
 pandas
 plotly
 jinja2
+kaleido

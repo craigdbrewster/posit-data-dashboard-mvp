@@ -4,6 +4,14 @@ import pandas as pd
 from shiny import App, ui, render, reactive
 import plotly.express as px
 
+
+def render_plotly(fig):
+    """Render a Plotly figure as HTML for Shiny @render.ui"""
+    return ui.tags.div(
+        ui.HTML(fig.to_html(include_plotlyjs="cdn")),
+        style="width: 100%; height: 500px; overflow: auto;"
+    )
+
 # -------------------------------------------------------------------
 # Data loading
 # -------------------------------------------------------------------
@@ -311,7 +319,7 @@ def server(input, output, session):
         df = filtered_timeseries()
         if df.empty:
             fig = px.line(title="No data for selected period")
-            return ui.HTML(fig.to_html())
+            return render_plotly(fig)
 
         # Weekly aggregation (guide)
         df_weekly = (
@@ -330,7 +338,7 @@ def server(input, output, session):
             labels={"value": "Value", "week": "Week", "variable": "Metric"},
         )
         fig.update_layout(legend_title_text="Metric")
-        return ui.HTML(fig.to_html())
+        return render_plotly(fig)
 
     @output
     @render.ui
@@ -348,7 +356,7 @@ def server(input, output, session):
             labels={"value": "Value", "tenancy": "Tenancy", "variable": "Metric"},
         )
         fig.update_layout(legend_title_text="Metric")
-        return ui.HTML(fig.to_html())
+        return render_plotly(fig)
 
     # ------------------------------------------------------------------
     # Licences tab
@@ -536,7 +544,7 @@ def server(input, output, session):
         df = filtered_timeseries()
         if df.empty:
             fig = px.pie(title="No data for selected period")
-            return ui.HTML(fig.to_html())
+            return render_plotly(fig)
 
         latest = df.sort_values("date").iloc[-1]
         dist = pd.DataFrame(
@@ -558,7 +566,7 @@ def server(input, output, session):
             labels={"users": "Users"},
         )
         fig.update_traces(textposition="outside")
-        return ui.HTML(fig.to_html())
+        return render_plotly(fig)
 
     @output
     @render.table
