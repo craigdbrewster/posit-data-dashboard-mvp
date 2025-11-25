@@ -197,30 +197,46 @@ app_ui = ui.page_fluid(
             ui.card(
                 ui.card_header("Licence usage by tenancy & component"),
                 ui.output_data_frame("lic_table"),
+                full_screen=True,
             ),
         ),
         # -------------------- Users --------------------
         ui.nav_panel(
             "Users",
-            ui.input_text("pid_search", "Search by PID", placeholder="Enter user ID"),
             ui.layout_column_wrap(
                 ui.card(
                     ui.card_header("Daily users"),
-                    ui.output_text("users_daily"),
+                    ui.div({"class": "h3"}, ui.output_text("users_daily")),
+                    ui.div(
+                        {"class": "text-muted"},
+                        ui.output_text("users_daily_change"),
+                    ),
                 ),
                 ui.card(
                     ui.card_header("Weekly users"),
-                    ui.output_text("users_weekly"),
+                    ui.div({"class": "h3"}, ui.output_text("users_weekly")),
+                    ui.div(
+                        {"class": "text-muted"},
+                        ui.output_text("users_weekly_change"),
+                    ),
                 ),
                 ui.card(
                     ui.card_header("Active users in period"),
-                    ui.output_text("users_active"),
+                    ui.div({"class": "h3"}, ui.output_text("users_active")),
+                    ui.div(
+                        {"class": "text-muted"},
+                        ui.output_text("users_active_change"),
+                    ),
                 ),
                 ui.card(
                     ui.card_header("Dormant users"),
-                    ui.output_text("users_dormant"),
+                    ui.div({"class": "h3"}, ui.output_text("users_dormant")),
+                    ui.div(
+                        {"class": "text-muted"},
+                        ui.output_text("users_dormant_change"),
+                    ),
                 ),
-                width=4,
+                width=3,
             ),
             ui.layout_column_wrap(
                 ui.card(
@@ -244,6 +260,7 @@ app_ui = ui.page_fluid(
             ),
             ui.card(
                 ui.card_header("User details"),
+                ui.input_text("pid_search", "Search by PID", placeholder="Enter user ID"),
                 ui.output_data_frame("users_table"),
             ),
         ),
@@ -253,6 +270,7 @@ app_ui = ui.page_fluid(
             ui.card(
                 ui.card_header("Tenancy summary"),
                 ui.output_data_frame("tenancies_table"),
+                full_screen=True,
             ),
         ),
     ),
@@ -742,9 +760,35 @@ def server(input, output, session):
 
     @output
     @render.text
+    def users_active_change():
+        active_current = len(filtered_users())
+        active_prev = len(filtered_users_prev_period())
+        
+        if active_prev > 0:
+            change = (active_current - active_prev) / active_prev * 100
+        else:
+            change = 0.0
+        arrow = "▲" if change >= 0 else "▼"
+        return f"{arrow} {change:.1f}% vs previous period"
+
+    @output
+    @render.text
     def users_dormant():
         dormant = TOTAL_USERS - len(filtered_users())
         return f"{dormant:,}"
+
+    @output
+    @render.text
+    def users_dormant_change():
+        dormant_current = TOTAL_USERS - len(filtered_users())
+        dormant_prev = TOTAL_USERS - len(filtered_users_prev_period())
+        
+        if dormant_prev > 0:
+            change = (dormant_current - dormant_prev) / dormant_prev * 100
+        else:
+            change = 0.0
+        arrow = "▲" if change >= 0 else "▼"
+        return f"{arrow} {change:.1f}% vs previous period"
 
     @output
     @render.text
@@ -758,12 +802,62 @@ def server(input, output, session):
 
     @output
     @render.text
+    def users_daily_change():
+        df_current = filtered_timeseries()
+        if df_current.empty:
+            return ""
+        latest_current = df_current.sort_values("date").iloc[-1]
+        daily_current = latest_current["powerUsers"]
+        
+        prev_start, prev_end = comparison_period()
+        df_prev = timeseries[
+            (timeseries["date"] >= prev_start) & (timeseries["date"] <= prev_end)
+        ]
+        if df_prev.empty:
+            return ""
+        latest_prev = df_prev.sort_values("date").iloc[-1]
+        daily_prev = latest_prev["powerUsers"]
+        
+        if daily_prev > 0:
+            change = (daily_current - daily_prev) / daily_prev * 100
+        else:
+            change = 0.0
+        arrow = "▲" if change >= 0 else "▼"
+        return f"{arrow} {change:.1f}% vs previous period"
+
+    @output
+    @render.text
     def users_weekly():
         df = filtered_timeseries()
         if df.empty:
             return "0"
         latest = df.sort_values("date").iloc[-1]
         return f"{int(latest['regularUsers']):,}"
+
+    @output
+    @render.text
+    def users_weekly_change():
+        df_current = filtered_timeseries()
+        if df_current.empty:
+            return ""
+        latest_current = df_current.sort_values("date").iloc[-1]
+        weekly_current = latest_current["regularUsers"]
+        
+        prev_start, prev_end = comparison_period()
+        df_prev = timeseries[
+            (timeseries["date"] >= prev_start) & (timeseries["date"] <= prev_end)
+        ]
+        if df_prev.empty:
+            return ""
+        latest_prev = df_prev.sort_values("date").iloc[-1]
+        weekly_prev = latest_prev["regularUsers"]
+        
+        if weekly_prev > 0:
+            change = (weekly_current - weekly_prev) / weekly_prev * 100
+        else:
+            change = 0.0
+        arrow = "▲" if change >= 0 else "▼"
+        return f"{arrow} {change:.1f}% vs previous period"
 
     @output
     @render.ui
