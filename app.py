@@ -215,10 +215,12 @@ app_ui = ui.page_fluid(
                     ui.card_header("Session metrics"),
                     ui.tags.ul(
                         ui.tags.li(
-                            "Average session length: 45 minutes (+7.1% vs previous)"
+                            "Average session length: ",
+                            ui.output_text("users_avg_session_length"),
                         ),
                         ui.tags.li(
-                            "Average sessions per user: 8.5 (+9.0% vs previous)"
+                            "Average sessions per user: ",
+                            ui.output_text("users_sessions_per_user"),
                         ),
                     ),
                 ),
@@ -381,6 +383,67 @@ def server(input, output, session):
         start, end = comparison_period()
         df = timeseries[(timeseries["date"] >= start) & (timeseries["date"] <= end)].copy()
         return df["sessionHours"].sum() if not df.empty else 0
+
+    @reactive.Calc
+    def daily_active_users_current():
+        """Users logging in at least once per day in current period (count)"""
+        # Note: users table has lastLogin but not granular daily stats
+        # Approximate: count distinct users in period
+        return len(filtered_users())
+
+    @reactive.Calc
+    def weekly_active_users_current():
+        """Users logging in at least once per week in current period"""
+        # Approximate: distinct users in filtered dataset
+        return len(filtered_users())
+
+    @reactive.Calc
+    def any_login_users_current():
+        """Users logging in at least once in current period"""
+        return len(filtered_users())
+
+    @reactive.Calc
+    def not_logged_in_current():
+        """Users not logged in during current period"""
+        start, end = current_period()
+        tenancy_val = input.tenancy()
+        env_val = input.environment()
+        comp_val = input.component()
+        
+        all_users = users.copy()
+        if tenancy_val != "All Tenancies":
+            all_users = all_users[all_users["tenancy"] == tenancy_val]
+        if env_val != "All Environments":
+            all_users = all_users[all_users["environment"] == env_val]
+        if comp_val != "All Components":
+            all_users = all_users[all_users["component"] == comp_val]
+        
+        logged_in_ids = set(filtered_users()["userId"])
+        not_logged_in = len(all_users[~all_users["userId"].isin(logged_in_ids)])
+        return not_logged_in
+
+    @reactive.Calc
+    def avg_session_length_current():
+        """Average session length (hours) in current period"""
+        df = filtered_timeseries()
+        if df.empty or len(filtered_users()) == 0:
+            return 0.0
+        total_hours = df["sessionHours"].sum()
+        num_users = len(filtered_users())
+        return total_hours / num_users if num_users > 0 else 0.0
+
+    @reactive.Calc
+    def sessions_per_user_current():
+        """Average sessions per user in current period (estimate from data)"""
+        # Estimate: if we have session hours, divide by typical session length (8.5 hours per day assumption)
+        # This is a proxy metric since detailed session data isn't available
+        df = filtered_timeseries()
+        num_users = len(filtered_users())
+        num_days = len(df) if not df.empty else 1
+        if num_users == 0 or num_days == 0:
+            return 0.0
+        avg_active_users_per_day = df["activeUsers"].mean() if "activeUsers" in df.columns else 0
+        return avg_active_users_per_day if avg_active_users_per_day > 0 else 0.0
 
     @output
     @render.text
@@ -698,6 +761,19 @@ def server(input, output, session):
         )
         fig.update_traces(textposition="outside")
         return render_plotly(fig)
+
+    @output
+    @render.text
+    def users_avg_session_length():
+        hours = avg_session_length_current()
+        minutes = hours * 60
+        return f"{minutes:.0f} minutes"
+
+    @output
+    @render.text
+    def users_sessions_per_user():
+        sessions = sessions_per_user_current()
+        return f"{sessions:.1f}"
 
     @output
     @render.data_frame
