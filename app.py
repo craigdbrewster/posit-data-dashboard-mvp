@@ -102,7 +102,6 @@ app_ui = ui.page_fluid(
             ui.nav_panel(
                 "Overview",
                 ui.layout_column_wrap(
-                    3,
                     ui.card(
                         ui.card_header("Total users"),
                         ui.h3(TOTAL_USERS),
@@ -120,9 +119,9 @@ app_ui = ui.page_fluid(
                         ui.h3(NEW_USERS),
                         ui.div({"class": "text-muted"}, "Static for MVP"),
                     ),
+                    width=3,
                 ),
                 ui.layout_column_wrap(
-                    2,
                     ui.card(
                         ui.card_header("Active users & session hours by week"),
                         ui.output_plot("overview_timeseries"),
@@ -131,13 +130,13 @@ app_ui = ui.page_fluid(
                         ui.card_header("Active users & session hours by tenancy"),
                         ui.output_plot("overview_tenancy_bars"),
                     ),
+                    width=2,
                 ),
             ),
             # -------------------- Licences --------------------
             ui.nav_panel(
                 "Licences",
                 ui.layout_column_wrap(
-                    2,
                     ui.card(
                         ui.card_header("Connect licences used"),
                         ui.output_text("lic_connect_summary"),
@@ -146,6 +145,7 @@ app_ui = ui.page_fluid(
                         ui.card_header("Workbench licences used"),
                         ui.output_text("lic_workbench_summary"),
                     ),
+                    width=2,
                 ),
                 ui.card(
                     ui.card_header("Licence usage by tenancy & component"),
@@ -156,7 +156,6 @@ app_ui = ui.page_fluid(
             ui.nav_panel(
                 "Users",
                 ui.layout_column_wrap(
-                    4,
                     ui.card(
                         ui.card_header("Daily users"),
                         ui.output_text("users_daily"),
@@ -173,9 +172,9 @@ app_ui = ui.page_fluid(
                         ui.card_header("Dormant users"),
                         ui.output_text("users_dormant"),
                     ),
+                    width=4,
                 ),
                 ui.layout_column_wrap(
-                    2,
                     ui.card(
                         ui.card_header("Usage distribution"),
                         ui.output_plot("users_distribution"),
@@ -191,6 +190,7 @@ app_ui = ui.page_fluid(
                             ),
                         ),
                     ),
+                    width=2,
                 ),
                 ui.card(
                     ui.card_header("User details"),
