@@ -121,6 +121,10 @@ app_ui = ui.page_fluid(
                 ui.card(
                     ui.card_header("Total users"),
                     ui.h3(TOTAL_USERS),
+                    ui.div(
+                        {"class": "text-muted"},
+                        ui.output_text("overview_total_users_change"),
+                    ),
                 ),
                 ui.card(
                     ui.card_header("Active users"),
@@ -133,7 +137,10 @@ app_ui = ui.page_fluid(
                 ui.card(
                     ui.card_header("New users"),
                     ui.h3(NEW_USERS),
-                    ui.div({"class": "text-muted"}, "Static for MVP"),
+                    ui.div(
+                        {"class": "text-muted"},
+                        ui.output_text("overview_new_users_change"),
+                    ),
                 ),
                 width=3,
             ),
@@ -320,6 +327,15 @@ def server(input, output, session):
 
     @output
     @render.text
+    def overview_total_users_change():
+        current = len(users)
+        prev = len(users)  # Total users is static, so no change
+        change = 0.0
+        arrow = "▲" if change >= 0 else "▼"
+        return f"{arrow} {change:.1f}% vs previous period"
+
+    @output
+    @render.text
     def overview_active_users_change():
         current = len(filtered_users())
         prev = len(filtered_users_prev_period())
@@ -327,6 +343,14 @@ def server(input, output, session):
             change = (current - prev) / prev * 100
         else:
             change = 0.0
+        arrow = "▲" if change >= 0 else "▼"
+        return f"{arrow} {change:.1f}% vs previous period"
+
+    @output
+    @render.text
+    def overview_new_users_change():
+        # New users is static, so no change
+        change = 0.0
         arrow = "▲" if change >= 0 else "▼"
         return f"{arrow} {change:.1f}% vs previous period"
 
