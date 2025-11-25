@@ -306,11 +306,12 @@ def server(input, output, session):
         return f"{arrow} {change:.1f}% vs previous period"
 
     @output
-    @render.plot
+    @render.ui
     def overview_timeseries():
         df = filtered_timeseries()
         if df.empty:
-            return px.line(title="No data for selected period")
+            fig = px.line(title="No data for selected period")
+            return ui.HTML(fig.to_html())
 
         # Weekly aggregation (guide)
         df_weekly = (
@@ -329,10 +330,10 @@ def server(input, output, session):
             labels={"value": "Value", "week": "Week", "variable": "Metric"},
         )
         fig.update_layout(legend_title_text="Metric")
-        return fig
+        return ui.HTML(fig.to_html())
 
     @output
-    @render.plot
+    @render.ui
     def overview_tenancy_bars():
         # Use tenancy snapshot for "by tenancy" bar chart
         df = tenancies.copy()
@@ -347,7 +348,7 @@ def server(input, output, session):
             labels={"value": "Value", "tenancy": "Tenancy", "variable": "Metric"},
         )
         fig.update_layout(legend_title_text="Metric")
-        return fig
+        return ui.HTML(fig.to_html())
 
     # ------------------------------------------------------------------
     # Licences tab
@@ -530,11 +531,12 @@ def server(input, output, session):
         return f"{int(latest['regularUsers']):,}"
 
     @output
-    @render.plot
+    @render.ui
     def users_distribution():
         df = filtered_timeseries()
         if df.empty:
-            return px.pie(title="No data for selected period")
+            fig = px.pie(title="No data for selected period")
+            return ui.HTML(fig.to_html())
 
         latest = df.sort_values("date").iloc[-1]
         dist = pd.DataFrame(
@@ -556,7 +558,7 @@ def server(input, output, session):
             labels={"users": "Users"},
         )
         fig.update_traces(textposition="outside")
-        return fig
+        return ui.HTML(fig.to_html())
 
     @output
     @render.table
