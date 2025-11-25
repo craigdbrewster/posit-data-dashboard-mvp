@@ -136,10 +136,18 @@ app_ui = ui.page_fluid(
                 ),
                 ui.card(
                     ui.card_header("New users"),
-                    ui.h3(NEW_USERS),
+                    ui.h3(ui.output_text("overview_new_users")),
                     ui.div(
                         {"class": "text-muted"},
                         ui.output_text("overview_new_users_change"),
+                    ),
+                ),
+                ui.card(
+                    ui.card_header("Total session hours"),
+                    ui.h3(ui.output_text("overview_session_hours")),
+                    ui.div(
+                        {"class": "text-muted"},
+                        ui.output_text("overview_session_hours_change"),
                     ),
                 ),
                 width=3,
@@ -315,9 +323,64 @@ def server(input, output, session):
             df = df[df["userId"].str.contains(pid_search.strip(), case=False, na=False)]
         return df
 
-    # ------------------------------------------------------------------
-    # Overview tab
-    # ------------------------------------------------------------------
+    @reactive.Calc
+    def new_users_current():
+        """Count of users first seen in current period"""
+        tenancy_val = input.tenancy()
+        env_val = input.environment()
+        comp_val = input.component()
+        start, end = current_period()
+        
+        df = users.copy()
+        if tenancy_val != "All Tenancies":
+            df = df[df["tenancy"] == tenancy_val]
+        if env_val != "All Environments":
+            df = df[df["environment"] == env_val]
+        if comp_val != "All Components":
+            df = df[df["component"] == comp_val]
+        
+        # New users: those who appear in current period but not in any earlier data
+        comp_start, _ = comparison_period()
+        before_period = df[df["lastLogin"] < comp_start]
+        in_current = df[(df["lastLogin"] >= start) & (df["lastLogin"] <= end)]
+        new_ids = set(in_current["userId"]) - set(before_period["userId"])
+        return len(new_ids)
+
+    @reactive.Calc
+    def new_users_previous():
+        """Count of new users in previous period for comparison"""
+        tenancy_val = input.tenancy()
+        env_val = input.environment()
+        comp_val = input.component()
+        comp_start, comp_end = comparison_period()
+        
+        df = users.copy()
+        if tenancy_val != "All Tenancies":
+            df = df[df["tenancy"] == tenancy_val]
+        if env_val != "All Environments":
+            df = df[df["environment"] == env_val]
+        if comp_val != "All Components":
+            df = df[df["component"] == comp_val]
+        
+        # Get date before comparison period
+        before_comp = comp_start - timedelta(days=1)
+        before_period = df[df["lastLogin"] < before_comp]
+        in_prev = df[(df["lastLogin"] >= comp_start) & (df["lastLogin"] <= comp_end)]
+        new_ids = set(in_prev["userId"]) - set(before_period["userId"])
+        return len(new_ids)
+
+    @reactive.Calc
+    def total_session_hours_current():
+        """Total session hours in current period"""
+        df = filtered_timeseries()
+        return df["sessionHours"].sum() if not df.empty else 0
+
+    @reactive.Calc
+    def total_session_hours_previous():
+        """Total session hours in previous period"""
+        start, end = comparison_period()
+        df = timeseries[(timeseries["date"] >= start) & (timeseries["date"] <= end)].copy()
+        return df["sessionHours"].sum() if not df.empty else 0
 
     @output
     @render.text
@@ -348,9 +411,36 @@ def server(input, output, session):
 
     @output
     @render.text
+    def overview_new_users():
+        return f"{new_users_current():,}"
+
+    @output
+    @render.text
     def overview_new_users_change():
-        # New users is static, so no change
-        change = 0.0
+        current = new_users_current()
+        prev = new_users_previous()
+        if prev > 0:
+            change = (current - prev) / prev * 100
+        else:
+            change = 0.0 if current == 0 else 100.0
+        arrow = "▲" if change >= 0 else "▼"
+        return f"{arrow} {change:.1f}% vs previous period"
+
+    @output
+    @render.text
+    def overview_session_hours():
+        hours = total_session_hours_current()
+        return f"{hours:,.0f}"
+
+    @output
+    @render.text
+    def overview_session_hours_change():
+        current = total_session_hours_current()
+        prev = total_session_hours_previous()
+        if prev > 0:
+            change = (current - prev) / prev * 100
+        else:
+            change = 0.0 if current == 0 else 100.0
         arrow = "▲" if change >= 0 else "▼"
         return f"{arrow} {change:.1f}% vs previous period"
 
