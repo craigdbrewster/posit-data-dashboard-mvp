@@ -169,14 +169,30 @@ app_ui = ui.page_fluid(
             "Licences",
             ui.layout_column_wrap(
                 ui.card(
-                    ui.card_header("Connect licences used"),
-                    ui.div({"class": "h3"}, ui.output_text("lic_connect_summary")),
+                    ui.card_header("Assigned Connect licences"),
+                    ui.div({"class": "h3"}, ui.output_text("lic_connect_assigned")),
                 ),
                 ui.card(
-                    ui.card_header("Workbench licences used"),
-                    ui.div({"class": "h3"}, ui.output_text("lic_workbench_summary")),
+                    ui.card_header("Active Connect licences"),
+                    ui.div({"class": "h3"}, ui.output_text("lic_connect_active")),
+                    ui.div(
+                        {"class": "text-muted"},
+                        ui.output_text("lic_connect_active_change"),
+                    ),
                 ),
-                width=2,
+                ui.card(
+                    ui.card_header("Assigned Workbench licences"),
+                    ui.div({"class": "h3"}, ui.output_text("lic_workbench_assigned")),
+                ),
+                ui.card(
+                    ui.card_header("Active Workbench licences"),
+                    ui.div({"class": "h3"}, ui.output_text("lic_workbench_active")),
+                    ui.div(
+                        {"class": "text-muted"},
+                        ui.output_text("lic_workbench_active_change"),
+                    ),
+                ),
+                width=3,
             ),
             ui.card(
                 ui.card_header("Licence usage by tenancy & component"),
@@ -574,19 +590,32 @@ def server(input, output, session):
 
     @output
     @render.text
-    def lic_connect_summary():
+    def lic_connect_assigned():
         tenancy_val = input.tenancy()
         comp_val = input.component()
-        # filter licences snapshot
         lic_df = licences.copy()
         if tenancy_val != "All Tenancies":
             lic_df = lic_df[lic_df["tenancy"] == tenancy_val]
         if comp_val != "All Components":
             lic_df = lic_df[lic_df["component"] == comp_val]
-
+        
         connect_assigned = lic_df.loc[
             lic_df["component"] == "Connect", "licencesUsed"
         ].sum()
+        return f"{int(connect_assigned):,} of {TOTAL_CONNECT_LICENCES:,}"
+
+    @output
+    @render.text
+    def lic_connect_active():
+        current_start, current_end = current_period()
+        connect_active_current, _ = _licence_active_users_for_period(
+            current_start, current_end
+        )
+        return f"{connect_active_current:,}"
+
+    @output
+    @render.text
+    def lic_connect_active_change():
         current_start, current_end = current_period()
         prev_start, prev_end = comparison_period()
         connect_active_current, _ = _licence_active_users_for_period(
@@ -595,21 +624,16 @@ def server(input, output, session):
         connect_active_prev, _ = _licence_active_users_for_period(
             prev_start, prev_end
         )
-
         if connect_active_prev > 0:
             change = (connect_active_current - connect_active_prev) / connect_active_prev * 100
         else:
             change = 0.0
         arrow = "▲" if change >= 0 else "▼"
-
-        return (
-            f"{connect_active_current:,} active of {connect_assigned:,} assigned "
-            f"(total capacity {TOTAL_CONNECT_LICENCES:,}) — {arrow} {change:.1f}% vs previous"
-        )
+        return f"{arrow} {change:.1f}% vs previous period"
 
     @output
     @render.text
-    def lic_workbench_summary():
+    def lic_workbench_assigned():
         tenancy_val = input.tenancy()
         comp_val = input.component()
         lic_df = licences.copy()
@@ -617,10 +641,24 @@ def server(input, output, session):
             lic_df = lic_df[lic_df["tenancy"] == tenancy_val]
         if comp_val != "All Components":
             lic_df = lic_df[lic_df["component"] == comp_val]
-
+        
         workbench_assigned = lic_df.loc[
             lic_df["component"] == "Workbench", "licencesUsed"
         ].sum()
+        return f"{int(workbench_assigned):,} of {TOTAL_WORKBENCH_LICENCES:,}"
+
+    @output
+    @render.text
+    def lic_workbench_active():
+        current_start, current_end = current_period()
+        _, workbench_active_current = _licence_active_users_for_period(
+            current_start, current_end
+        )
+        return f"{workbench_active_current:,}"
+
+    @output
+    @render.text
+    def lic_workbench_active_change():
         current_start, current_end = current_period()
         prev_start, prev_end = comparison_period()
         _, workbench_active_current = _licence_active_users_for_period(
@@ -629,17 +667,12 @@ def server(input, output, session):
         _, workbench_active_prev = _licence_active_users_for_period(
             prev_start, prev_end
         )
-
         if workbench_active_prev > 0:
             change = (workbench_active_current - workbench_active_prev) / workbench_active_prev * 100
         else:
             change = 0.0
         arrow = "▲" if change >= 0 else "▼"
-
-        return (
-            f"{workbench_active_current:,} active of {workbench_assigned:,} assigned "
-            f"(total capacity {TOTAL_WORKBENCH_LICENCES:,}) — {arrow} {change:.1f}% vs previous"
-        )
+        return f"{arrow} {change:.1f}% vs previous period"
 
     @output
     @render.data_frame
