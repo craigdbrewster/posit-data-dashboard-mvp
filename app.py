@@ -7,10 +7,12 @@ import plotly.express as px
 
 def render_plotly(fig):
     """Render a Plotly figure as HTML for Shiny @render.ui"""
-    return ui.tags.div(
-        ui.HTML(fig.to_html(include_plotlyjs="cdn")),
-        style="width: 100%; height: 500px; overflow: auto;"
+    # Use config to allow interaction and include plotly.js inline
+    html_str = fig.to_html(
+        include_plotlyjs="require",
+        div_id=f"plot-{id(fig)}"
     )
+    return ui.HTML(html_str)
 
 # -------------------------------------------------------------------
 # Data loading
@@ -70,148 +72,154 @@ def component_choices():
 # -------------------------------------------------------------------
 
 app_ui = ui.page_fluid(
-    ui.h1("Posit Platform Analytics", class_="mt-3"),
+    ui.h1("Posit Platform Analytics", class_="mt-2 mb-3"),
     ui.p(
         "Track platform adoption and engagement. Use the filters below to slice by tenancy, "
-        "environment, component, and period."
+        "environment, component, and period.",
+        class_="mb-3"
     ),
-    ui.layout_sidebar(
-        ui.sidebar(
-            ui.input_select(
-                "tenancy",
-                "Tenancy",
-                choices=tenancy_choices(),
-                selected="All Tenancies",
-            ),
-            ui.input_select(
-                "environment",
-                "Environment",
-                choices=environment_choices(),
-                selected="All Environments",
-            ),
-            ui.input_select(
-                "component",
-                "Component",
-                choices=component_choices(),
-                selected="All Components",
-            ),
-            ui.input_date_range(
-                "dates",
-                "Date range",
-                start=default_start,
-                end=default_end,
-                min=min_date.date(),
-                max=max_date.date(),
-            ),
-            open="always",
+    # Horizontal filter bar at top
+    ui.layout_column_wrap(
+        ui.input_select(
+            "tenancy",
+            "Tenancy",
+            choices=tenancy_choices(),
+            selected="All Tenancies",
+            width="100%"
         ),
-        ui.navset_tab(
-            # -------------------- Overview --------------------
-            ui.nav_panel(
-                "Overview",
-                ui.layout_column_wrap(
-                    ui.card(
-                        ui.card_header("Total users"),
-                        ui.h3(TOTAL_USERS),
+        ui.input_select(
+            "environment",
+            "Environment",
+            choices=environment_choices(),
+            selected="All Environments",
+            width="100%"
+        ),
+        ui.input_select(
+            "component",
+            "Component",
+            choices=component_choices(),
+            selected="All Components",
+            width="100%"
+        ),
+        ui.input_date_range(
+            "dates",
+            "Date range",
+            start=default_start,
+            end=default_end,
+            min=min_date.date(),
+            max=max_date.date(),
+            width="100%"
+        ),
+        width=4,
+        class_="mb-4"
+    ),
+    ui.navset_tab(
+        # -------------------- Overview --------------------
+        ui.nav_panel(
+            "Overview",
+            ui.layout_column_wrap(
+                ui.card(
+                    ui.card_header("Total users"),
+                    ui.h3(TOTAL_USERS),
+                ),
+                ui.card(
+                    ui.card_header("Active users"),
+                    ui.output_text("overview_active_users"),
+                    ui.div(
+                        {"class": "text-muted"},
+                        ui.output_text("overview_active_users_change"),
                     ),
-                    ui.card(
-                        ui.card_header("Active users"),
-                        ui.output_text("overview_active_users"),
-                        ui.div(
-                            {"class": "text-muted"},
-                            ui.output_text("overview_active_users_change"),
+                ),
+                ui.card(
+                    ui.card_header("New users"),
+                    ui.h3(NEW_USERS),
+                    ui.div({"class": "text-muted"}, "Static for MVP"),
+                ),
+                width=3,
+            ),
+            ui.layout_column_wrap(
+                ui.card(
+                    ui.card_header("Active users & session hours by week"),
+                    ui.output_ui("overview_timeseries"),
+                ),
+                ui.card(
+                    ui.card_header("Active users & session hours by tenancy"),
+                    ui.output_ui("overview_tenancy_bars"),
+                ),
+                width=2,
+            ),
+        ),
+        # -------------------- Licences --------------------
+        ui.nav_panel(
+            "Licences",
+            ui.layout_column_wrap(
+                ui.card(
+                    ui.card_header("Connect licences used"),
+                    ui.output_text("lic_connect_summary"),
+                ),
+                ui.card(
+                    ui.card_header("Workbench licences used"),
+                    ui.output_text("lic_workbench_summary"),
+                ),
+                width=2,
+            ),
+            ui.card(
+                ui.card_header("Licence usage by tenancy & component"),
+                ui.output_data_frame("lic_table"),
+            ),
+        ),
+        # -------------------- Users --------------------
+        ui.nav_panel(
+            "Users",
+            ui.input_text("pid_search", "Search by PID", placeholder="Enter user ID"),
+            ui.layout_column_wrap(
+                ui.card(
+                    ui.card_header("Daily users"),
+                    ui.output_text("users_daily"),
+                ),
+                ui.card(
+                    ui.card_header("Weekly users"),
+                    ui.output_text("users_weekly"),
+                ),
+                ui.card(
+                    ui.card_header("Active users in period"),
+                    ui.output_text("users_active"),
+                ),
+                ui.card(
+                    ui.card_header("Dormant users"),
+                    ui.output_text("users_dormant"),
+                ),
+                width=4,
+            ),
+            ui.layout_column_wrap(
+                ui.card(
+                    ui.card_header("Usage distribution"),
+                    ui.output_ui("users_distribution"),
+                ),
+                ui.card(
+                    ui.card_header("Session metrics"),
+                    ui.tags.ul(
+                        ui.tags.li(
+                            "Average session length: 45 minutes (+7.1% vs previous)"
+                        ),
+                        ui.tags.li(
+                            "Average sessions per user: 8.5 (+9.0% vs previous)"
                         ),
                     ),
-                    ui.card(
-                        ui.card_header("New users"),
-                        ui.h3(NEW_USERS),
-                        ui.div({"class": "text-muted"}, "Static for MVP"),
-                    ),
-                    width=3,
                 ),
-                ui.layout_column_wrap(
-                    ui.card(
-                        ui.card_header("Active users & session hours by week"),
-                        ui.output_plot("overview_timeseries"),
-                    ),
-                    ui.card(
-                        ui.card_header("Active users & session hours by tenancy"),
-                        ui.output_plot("overview_tenancy_bars"),
-                    ),
-                    width=2,
-                ),
+                width=2,
             ),
-            # -------------------- Licences --------------------
-            ui.nav_panel(
-                "Licences",
-                ui.layout_column_wrap(
-                    ui.card(
-                        ui.card_header("Connect licences used"),
-                        ui.output_text("lic_connect_summary"),
-                    ),
-                    ui.card(
-                        ui.card_header("Workbench licences used"),
-                        ui.output_text("lic_workbench_summary"),
-                    ),
-                    width=2,
-                ),
-                ui.card(
-                    ui.card_header("Licence usage by tenancy & component"),
-                    ui.output_table("lic_table"),
-                ),
+            ui.card(
+                ui.card_header("User details"),
+                ui.output_data_frame("users_table"),
             ),
-            # -------------------- Users --------------------
-            ui.nav_panel(
-                "Users",
-                ui.layout_column_wrap(
-                    ui.card(
-                        ui.card_header("Daily users"),
-                        ui.output_text("users_daily"),
-                    ),
-                    ui.card(
-                        ui.card_header("Weekly users"),
-                        ui.output_text("users_weekly"),
-                    ),
-                    ui.card(
-                        ui.card_header("Active users in period"),
-                        ui.output_text("users_active"),
-                    ),
-                    ui.card(
-                        ui.card_header("Dormant users"),
-                        ui.output_text("users_dormant"),
-                    ),
-                    width=4,
-                ),
-                ui.layout_column_wrap(
-                    ui.card(
-                        ui.card_header("Usage distribution"),
-                        ui.output_plot("users_distribution"),
-                    ),
-                    ui.card(
-                        ui.card_header("Session metrics"),
-                        ui.tags.ul(
-                            ui.tags.li(
-                                "Average session length: 45 minutes (+7.1% vs previous)"
-                            ),
-                            ui.tags.li(
-                                "Average sessions per user: 8.5 (+9.0% vs previous)"
-                            ),
-                        ),
-                    ),
-                    width=2,
-                ),
-                ui.card(
-                    ui.card_header("User details"),
-                    ui.output_table("users_table"),
-                ),
-            ),
-            # -------------------- Tenancies --------------------
-            ui.nav_panel(
-                "Tenancies",
-                ui.card(
-                    ui.card_header("Tenancy summary"),
-                    ui.output_table("tenancies_table"),
-                ),
+        ),
+        # -------------------- Tenancies --------------------
+        ui.nav_panel(
+            "Tenancies",
+            ui.card(
+                ui.card_header("Tenancy summary"),
+                ui.output_data_frame("tenancies_table"),
             ),
         ),
     ),
@@ -289,6 +297,15 @@ def server(input, output, session):
     def filtered_timeseries():
         start, end = current_period()
         df = timeseries[(timeseries["date"] >= start) & (timeseries["date"] <= end)].copy()
+        return df
+
+    @reactive.Calc
+    def filtered_users_by_pid():
+        """Filter users table by PID search"""
+        df = filtered_users().copy()
+        pid_search = input.pid_search()
+        if pid_search and pid_search.strip():
+            df = df[df["userId"].str.contains(pid_search.strip(), case=False, na=False)]
         return df
 
     # ------------------------------------------------------------------
@@ -448,7 +465,7 @@ def server(input, output, session):
         )
 
     @output
-    @render.table
+    @render.data_frame
     def lic_table():
         tenancy_val = input.tenancy()
         comp_val = input.component()
@@ -569,9 +586,9 @@ def server(input, output, session):
         return render_plotly(fig)
 
     @output
-    @render.table
+    @render.data_frame
     def users_table():
-        df = filtered_users().copy()
+        df = filtered_users_by_pid().copy()
         if df.empty:
             # Return an empty frame with the correct columns so the table still renders
             return pd.DataFrame(
@@ -586,7 +603,7 @@ def server(input, output, session):
     # ------------------------------------------------------------------
 
     @output
-    @render.table
+    @render.data_frame
     def tenancies_table():
         tenancy_val = input.tenancy()
         comp_val = input.component()
