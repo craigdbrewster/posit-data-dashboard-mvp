@@ -124,7 +124,7 @@ app_ui = ui.page_fluid(
                 ),
                 ui.card(
                     ui.card_header("Active users"),
-                    ui.output_text("overview_active_users"),
+                    ui.h3(ui.output_text("overview_active_users")),
                     ui.div(
                         {"class": "text-muted"},
                         ui.output_text("overview_active_users_change"),
@@ -155,11 +155,11 @@ app_ui = ui.page_fluid(
             ui.layout_column_wrap(
                 ui.card(
                     ui.card_header("Connect licences used"),
-                    ui.output_text("lic_connect_summary"),
+                    ui.h3(ui.output_text("lic_connect_summary")),
                 ),
                 ui.card(
                     ui.card_header("Workbench licences used"),
-                    ui.output_text("lic_workbench_summary"),
+                    ui.h3(ui.output_text("lic_workbench_summary")),
                 ),
                 width=2,
             ),
