@@ -194,11 +194,7 @@ app_ui = ui.page_fluid(
                 ),
                 width=3,
             ),
-            ui.card(
-                ui.card_header("Licence usage by tenancy & component"),
-                ui.output_data_frame("lic_table"),
-                full_screen=True,
-            ),
+            ui.output_data_frame("lic_table"),
         ),
         # -------------------- Users --------------------
         ui.nav_panel(
@@ -258,20 +254,13 @@ app_ui = ui.page_fluid(
                 ),
                 width=2,
             ),
-            ui.card(
-                ui.card_header("User details"),
-                ui.input_text("pid_search", "Search by PID", placeholder="Enter user ID"),
-                ui.output_data_frame("users_table"),
-            ),
+            ui.input_text("pid_search", "Search by PID", placeholder="Enter user ID"),
+            ui.output_data_frame("users_table"),
         ),
         # -------------------- Tenancies --------------------
         ui.nav_panel(
             "Tenancies",
-            ui.card(
-                ui.card_header("Tenancy summary"),
-                ui.output_data_frame("tenancies_table"),
-                full_screen=True,
-            ),
+            ui.output_data_frame("tenancies_table"),
         ),
     ),
 )
@@ -747,6 +736,8 @@ def server(input, output, session):
 
         final = pd.concat([out, totals], ignore_index=True)
         final = final[["Tenancy", "Component", "Assigned licences", "Active licences"]]
+        # Rename columns to title case for better display
+        final.columns = ["Tenancy", "Component", "Assigned Licences", "Active Licences"]
         return final.sort_values(["Tenancy", "Component"])
 
     # ------------------------------------------------------------------
@@ -909,11 +900,13 @@ def server(input, output, session):
         if df.empty:
             # Return an empty frame with the correct columns so the table still renders
             return pd.DataFrame(
-                columns=["userId", "tenancy", "component", "environment", "lastLogin", "loginCount"]
+                columns=["User ID", "Tenancy", "Component", "Environment", "Last login", "Login count"]
             )
 
         df = df.sort_values("lastLogin", ascending=False)
-        return df[["userId", "tenancy", "component", "environment", "lastLogin", "loginCount"]]
+        out = df[["userId", "tenancy", "component", "environment", "lastLogin", "loginCount"]].copy()
+        out.columns = ["User ID", "Tenancy", "Component", "Environment", "Last login", "Login count"]
+        return out
 
     # ------------------------------------------------------------------
     # Tenancies tab
