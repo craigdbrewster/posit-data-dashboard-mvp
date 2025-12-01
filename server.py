@@ -519,13 +519,8 @@ def server(input, output, session):
 
         final = pd.concat([out, totals], ignore_index=True)
         final = final[["Tenancy", "Component", "Assigned licences", "Active licences"]]
-        final.columns = [
-            "Tenancy <span class='default-chevron'>&#9650;</span>",
-            "Component",
-            "Assigned Licences",
-            "Active Licences",
-        ]
-        sorted_df = final.sort_values(final.columns.to_list()[:2])
+        final.columns = ["Tenancy", "Component", "Assigned Licences", "Active Licences"]
+        sorted_df = final.sort_values(["Tenancy", "Component"])
         return sorted_df
 
     # ------------------------------------------------------------------
@@ -734,7 +729,7 @@ def server(input, output, session):
                     "Tenancy",
                     "Component",
                     "Environment",
-                    "Last login <span class='default-chevron'>&#9660;</span>",
+                    "Last login",
                     "Login count",
                 ]
             )
@@ -748,7 +743,7 @@ def server(input, output, session):
             "Tenancy",
             "Component",
             "Environment",
-            "Last login <span class='default-chevron'>&#9660;</span>",
+            "Last login",
             "Login count",
         ]
         return out
@@ -814,7 +809,7 @@ def server(input, output, session):
 
         display = pd.DataFrame(
             {
-                "Tenancy <span class='default-chevron'>&#9650;</span>": out["tenancy"],
+                "Tenancy": out["tenancy"],
                 "Total users": get("totalUsers_Connect") + get("totalUsers_Workbench"),
                 "Active users": get("activeUsersComponent_Connect")
                 + get("activeUsersComponent_Workbench"),
@@ -825,5 +820,5 @@ def server(input, output, session):
             }
         )
 
-        sorted_df = display.sort_values(display.columns[0])
+        sorted_df = display.sort_values("Tenancy")
         return sorted_df

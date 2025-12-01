@@ -195,6 +195,13 @@ app_ui = ui.page_fluid(
             table.dataTable thead th.sorting_asc .default-chevron {
                 display: none;
             }
+            /* Default sort hint only when DataTables header is in unsorted state */
+            .dataTable thead th.sorting:first-child::after {
+                content: "▲";
+                font-size: 12px;
+                margin-left: 4px;
+                color: #505a5f;
+            }
             .gds-secondary {
                 color: var(--gds-muted);
                 font-size: 15px;
