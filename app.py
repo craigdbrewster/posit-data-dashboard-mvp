@@ -1,18 +1,37 @@
 from datetime import date, datetime, timedelta
 
 import pandas as pd
-from shiny import App, ui, render, reactive
 import plotly.express as px
+from shiny import App, reactive, render, ui
 
 
 def render_plotly(fig):
     """Render a Plotly figure as HTML for Shiny @render.ui"""
-    # Use config to allow interaction and include plotly.js inline
-    html_str = fig.to_html(
-        include_plotlyjs="require",
-        div_id=f"plot-{id(fig)}"
-    )
+    html_str = fig.to_html(include_plotlyjs="require", div_id=f"plot-{id(fig)}")
     return ui.HTML(html_str)
+
+
+def metric_card(title, value, change=None, aria_label=None):
+    """Lightweight GDS-inspired stat card used across tabs."""
+    parts = [
+        ui.tags.div({"class": "gds-card__label"}, title),
+        ui.tags.div({"class": "gds-card__value"}, value),
+    ]
+    if change is not None:
+        parts.append(ui.tags.div({"class": "gds-card__change"}, change))
+    return ui.tags.div(
+        {"class": "gds-card", "role": "group", "aria-label": aria_label or title},
+        *parts,
+    )
+
+
+def panel_card(title, body):
+    """Panel wrapper matching the React mock styling."""
+    return ui.tags.div(
+        {"class": "gds-panel"},
+        ui.tags.div({"class": "gds-panel__title"}, title),
+        body,
+    )
 
 # -------------------------------------------------------------------
 # Data loading
@@ -72,195 +91,331 @@ def component_choices():
 # -------------------------------------------------------------------
 
 app_ui = ui.page_fluid(
-    ui.h1("Posit Platform Analytics", class_="mt-2 mb-3"),
-    ui.p(
-        "Track platform adoption and engagement. Use the filters below to slice by tenancy, "
-        "environment, component, and period.",
-        class_="mb-3"
+    ui.tags.head(
+        ui.tags.link(
+            rel="stylesheet",
+            href="https://unpkg.com/govuk-frontend@4.7.0/dist/govuk/all.css",
+        ),
+        ui.tags.script(src="https://unpkg.com/govuk-frontend@4.7.0/dist/govuk/all.js"),
+        ui.tags.script("window.GOVUKFrontend && window.GOVUKFrontend.initAll();"),
+        ui.tags.style(
+            """
+            :root {
+                --gds-ink: #0b0c0c;
+                --gds-muted: #505a5f;
+                --gds-border: #b1b4b6;
+                --gds-surface: #ffffff;
+                --gds-panel: #f3f2f1;
+                --gds-focus: #ffdd00;
+                --gds-accent: #1d70b8;
+            }
+            body {
+                background: var(--gds-panel);
+                color: var(--gds-ink);
+                font-family: "GDS Transport", "Helvetica Neue", Arial, sans-serif;
+            }
+            .zenith-app {
+                padding: 8px 0 40px;
+            }
+            .zenith-hero {
+                padding: 12px 0 24px;
+            }
+            .zenith-hero h1 {
+                margin: 0 0 8px;
+                font-weight: 700;
+            }
+            .zenith-hero p {
+                max-width: 900px;
+                margin: 0;
+                font-size: 17px;
+                color: var(--gds-muted);
+            }
+            .gds-filter-bar {
+                background: var(--gds-surface);
+                border: 1px solid var(--gds-border);
+                border-radius: 8px;
+                padding: 16px 18px;
+                margin: 20px 0;
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+                gap: 12px 18px;
+            }
+            .gds-filter-bar label.form-label {
+                font-weight: 700;
+                font-size: 16px;
+                margin-bottom: 6px;
+            }
+            .gds-filter-bar .form-select,
+            .gds-filter-bar input[type="text"],
+            .gds-filter-bar input[type="date"] {
+                border: 1px solid var(--gds-border);
+                border-radius: 4px;
+                min-height: 44px;
+                font-size: 16px;
+            }
+            .gds-tabs .nav-tabs {
+                border: none;
+                gap: 8px;
+                margin-bottom: 0;
+            }
+            .gds-tabs .nav-tabs .nav-link {
+                border: 1px solid var(--gds-border);
+                border-bottom: 0;
+                background: #e7e8e8;
+                color: var(--gds-ink);
+                border-radius: 6px 6px 0 0;
+                font-weight: 600;
+                padding: 10px 14px;
+            }
+            .gds-tabs .nav-tabs .nav-link.active {
+                background: var(--gds-surface);
+                border-color: var(--gds-border);
+                border-bottom: 0;
+            }
+            .gds-tabs .tab-content {
+                border: 1px solid var(--gds-border);
+                background: var(--gds-surface);
+                padding: 18px;
+                border-radius: 0 8px 8px 8px;
+            }
+            .gds-card-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                gap: 14px;
+                margin-bottom: 16px;
+            }
+            .gds-card {
+                background: var(--gds-surface);
+                border: 1px solid var(--gds-border);
+                border-radius: 8px;
+                padding: 14px 16px;
+                box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+            }
+            .gds-card__label {
+                font-size: 15px;
+                color: var(--gds-muted);
+                margin-bottom: 4px;
+            }
+            .gds-card__value {
+                font-size: 32px;
+                font-weight: 700;
+                line-height: 1.1;
+            }
+            .gds-card__change {
+                color: var(--gds-muted);
+                font-size: 14px;
+                margin-top: 2px;
+            }
+            .gds-panel-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+                gap: 14px;
+            }
+            .gds-panel {
+                background: var(--gds-surface);
+                border: 1px solid var(--gds-border);
+                border-radius: 8px;
+                padding: 12px 14px 10px;
+                box-shadow: 0 2px 0 rgba(0,0,0,0.03);
+            }
+            .gds-panel__title {
+                font-weight: 700;
+                margin: 0 0 6px;
+                font-size: 18px;
+            }
+            .gds-table-wrapper {
+                margin-top: 14px;
+                border: 1px solid var(--gds-border);
+                border-radius: 8px;
+                overflow: hidden;
+                background: var(--gds-surface);
+                padding: 8px;
+            }
+            table {
+                width: 100%;
+            }
+            .shiny-data-grid table {
+                font-size: 14px;
+            }
+            .gds-secondary {
+                color: var(--gds-muted);
+                font-size: 15px;
+            }
+            """
+        ),
     ),
-    # Horizontal filter bar at top
-    ui.layout_column_wrap(
-        ui.input_select(
-            "tenancy",
-            "Tenancy",
-            choices=tenancy_choices(),
-            selected="All Tenancies",
-            width="100%"
-        ),
-        ui.input_select(
-            "environment",
-            "Environment",
-            choices=environment_choices(),
-            selected="All Environments",
-            width="100%"
-        ),
-        ui.input_select(
-            "component",
-            "Component",
-            choices=component_choices(),
-            selected="All Components",
-            width="100%"
-        ),
-        ui.input_date_range(
-            "dates",
-            "Date range",
-            start=default_start,
-            end=default_end,
-            min=min_date.date(),
-            max=max_date.date(),
-            width="100%"
-        ),
-        width=4,
-        class_="mb-4"
-    ),
-    ui.navset_tab(
-        # -------------------- Overview --------------------
-        ui.nav_panel(
-            "Overview",
-            ui.layout_column_wrap(
-                ui.card(
-                    ui.card_header("Total users"),
-                    ui.h3(TOTAL_USERS),
-                    ui.div(
-                        {"class": "text-muted"},
-                        ui.output_text("overview_total_users_change"),
-                    ),
-                ),
-                ui.card(
-                    ui.card_header("Active users"),
-                    ui.div({"class": "h3"}, ui.output_text("overview_active_users")),
-                    ui.div(
-                        {"class": "text-muted"},
-                        ui.output_text("overview_active_users_change"),
-                    ),
-                ),
-                ui.card(
-                    ui.card_header("New users"),
-                    ui.div({"class": "h3"}, ui.output_text("overview_new_users")),
-                    ui.div(
-                        {"class": "text-muted"},
-                        ui.output_text("overview_new_users_change"),
-                    ),
-                ),
-                ui.card(
-                    ui.card_header("Total session hours"),
-                    ui.div({"class": "h3"}, ui.output_text("overview_session_hours")),
-                    ui.div(
-                        {"class": "text-muted"},
-                        ui.output_text("overview_session_hours_change"),
-                    ),
-                ),
-                width=3,
-            ),
-            ui.layout_column_wrap(
-                ui.card(
-                    ui.card_header("Active users & session hours by week"),
-                    ui.output_ui("overview_timeseries"),
-                ),
-                ui.card(
-                    ui.card_header("Active users & session hours by tenancy"),
-                    ui.output_ui("overview_tenancy_bars"),
-                ),
-                width=2,
+    ui.tags.div(
+        {"class": "govuk-width-container zenith-app"},
+        ui.tags.header(
+            {"class": "zenith-hero"},
+            ui.tags.span({"class": "govuk-caption-l"}, "Platform analytics"),
+            ui.tags.h1("Posit Platform Analytics", class_="govuk-heading-l"),
+            ui.tags.p(
+                "Track adoption, licences, and tenancy engagement with a GDS-aligned interface.",
+                class_="gds-secondary",
             ),
         ),
-        # -------------------- Licences --------------------
-        ui.nav_panel(
-            "Licences",
-            ui.layout_column_wrap(
-                ui.card(
-                    ui.card_header("Assigned Connect licences"),
-                    ui.div({"class": "h3"}, ui.output_text("lic_connect_assigned")),
-                ),
-                ui.card(
-                    ui.card_header("Active Connect licences"),
-                    ui.div({"class": "h3"}, ui.output_text("lic_connect_active")),
-                    ui.div(
-                        {"class": "text-muted"},
-                        ui.output_text("lic_connect_active_change"),
-                    ),
-                ),
-                ui.card(
-                    ui.card_header("Assigned Workbench licences"),
-                    ui.div({"class": "h3"}, ui.output_text("lic_workbench_assigned")),
-                ),
-                ui.card(
-                    ui.card_header("Active Workbench licences"),
-                    ui.div({"class": "h3"}, ui.output_text("lic_workbench_active")),
-                    ui.div(
-                        {"class": "text-muted"},
-                        ui.output_text("lic_workbench_active_change"),
-                    ),
-                ),
-                width=3,
+        ui.tags.div(
+            {"class": "gds-filter-bar"},
+            ui.input_select(
+                "tenancy",
+                "Tenancy",
+                choices=tenancy_choices(),
+                selected="All Tenancies",
+                width="100%",
             ),
-            ui.output_data_frame("lic_table"),
+            ui.input_select(
+                "environment",
+                "Environment",
+                choices=environment_choices(),
+                selected="All Environments",
+                width="100%",
+            ),
+            ui.input_select(
+                "component",
+                "Component",
+                choices=component_choices(),
+                selected="All Components",
+                width="100%",
+            ),
+            ui.input_date_range(
+                "dates",
+                "Date range",
+                start=default_start,
+                end=default_end,
+                min=min_date.date(),
+                max=max_date.date(),
+                width="100%",
+            ),
         ),
-        # -------------------- Users --------------------
-        ui.nav_panel(
-            "Users",
-            ui.layout_column_wrap(
-                ui.card(
-                    ui.card_header("Daily users"),
-                    ui.div({"class": "h3"}, ui.output_text("users_daily")),
-                    ui.div(
-                        {"class": "text-muted"},
-                        ui.output_text("users_daily_change"),
-                    ),
-                ),
-                ui.card(
-                    ui.card_header("Weekly users"),
-                    ui.div({"class": "h3"}, ui.output_text("users_weekly")),
-                    ui.div(
-                        {"class": "text-muted"},
-                        ui.output_text("users_weekly_change"),
-                    ),
-                ),
-                ui.card(
-                    ui.card_header("Active users in period"),
-                    ui.div({"class": "h3"}, ui.output_text("users_active")),
-                    ui.div(
-                        {"class": "text-muted"},
-                        ui.output_text("users_active_change"),
-                    ),
-                ),
-                ui.card(
-                    ui.card_header("Dormant users"),
-                    ui.div({"class": "h3"}, ui.output_text("users_dormant")),
-                    ui.div(
-                        {"class": "text-muted"},
-                        ui.output_text("users_dormant_change"),
-                    ),
-                ),
-                width=3,
-            ),
-            ui.layout_column_wrap(
-                ui.card(
-                    ui.card_header("Usage distribution"),
-                    ui.output_ui("users_distribution"),
-                ),
-                ui.card(
-                    ui.card_header("Session metrics"),
-                    ui.tags.ul(
-                        ui.tags.li(
-                            "Average session length: ",
-                            ui.output_text("users_avg_session_length"),
+        ui.tags.div(
+            {"class": "gds-tabs"},
+            ui.navset_tab(
+                # -------------------- Overview --------------------
+                ui.nav_panel(
+                    "Overview",
+                    ui.tags.div(
+                        {"class": "gds-card-grid"},
+                        metric_card(
+                            "Total users",
+                            ui.h3(f"{TOTAL_USERS:,}", class_="m-0"),
+                            ui.output_text("overview_total_users_change"),
                         ),
-                        ui.tags.li(
-                            "Average sessions per user: ",
-                            ui.output_text("users_sessions_per_user"),
+                        metric_card(
+                            "Active users",
+                            ui.output_text("overview_active_users"),
+                            ui.output_text("overview_active_users_change"),
+                        ),
+                        metric_card(
+                            "New users",
+                            ui.output_text("overview_new_users"),
+                            ui.output_text("overview_new_users_change"),
+                        ),
+                        metric_card(
+                            "Total session hours",
+                            ui.output_text("overview_session_hours"),
+                            ui.output_text("overview_session_hours_change"),
+                        ),
+                    ),
+                    ui.tags.div(
+                        {"class": "gds-panel-grid"},
+                        panel_card(
+                            "Active users & session hours by week",
+                            ui.output_ui("overview_timeseries"),
+                        ),
+                        panel_card(
+                            "Active users & session hours by tenancy",
+                            ui.output_ui("overview_tenancy_bars"),
                         ),
                     ),
                 ),
-                width=2,
+                # -------------------- Licences --------------------
+                ui.nav_panel(
+                    "Licences",
+                    ui.tags.div(
+                        {"class": "gds-card-grid"},
+                        metric_card(
+                            "Assigned Connect licences",
+                            ui.output_text("lic_connect_assigned"),
+                        ),
+                        metric_card(
+                            "Active Connect licences",
+                            ui.output_text("lic_connect_active"),
+                            ui.output_text("lic_connect_active_change"),
+                        ),
+                        metric_card(
+                            "Assigned Workbench licences",
+                            ui.output_text("lic_workbench_assigned"),
+                        ),
+                        metric_card(
+                            "Active Workbench licences",
+                            ui.output_text("lic_workbench_active"),
+                            ui.output_text("lic_workbench_active_change"),
+                        ),
+                    ),
+                    ui.tags.div({"class": "gds-table-wrapper"}, ui.output_data_frame("lic_table")),
+                ),
+                # -------------------- Users --------------------
+                ui.nav_panel(
+                    "Users",
+                    ui.tags.div(
+                        {"class": "gds-card-grid"},
+                        metric_card(
+                            "Daily users",
+                            ui.output_text("users_daily"),
+                            ui.output_text("users_daily_change"),
+                        ),
+                        metric_card(
+                            "Weekly users",
+                            ui.output_text("users_weekly"),
+                            ui.output_text("users_weekly_change"),
+                        ),
+                        metric_card(
+                            "Active users in period",
+                            ui.output_text("users_active"),
+                            ui.output_text("users_active_change"),
+                        ),
+                        metric_card(
+                            "Dormant users",
+                            ui.output_text("users_dormant"),
+                            ui.output_text("users_dormant_change"),
+                        ),
+                    ),
+                    ui.tags.div(
+                        {"class": "gds-panel-grid"},
+                        panel_card("Usage distribution", ui.output_ui("users_distribution")),
+                        panel_card(
+                            "Session metrics",
+                            ui.tags.ul(
+                                ui.tags.li(
+                                    "Average session length: ",
+                                    ui.output_text("users_avg_session_length"),
+                                ),
+                                ui.tags.li(
+                                    "Average sessions per user: ",
+                                    ui.output_text("users_sessions_per_user"),
+                                ),
+                            ),
+                        ),
+                    ),
+                    ui.tags.div(
+                        {"class": "gds-filter-bar", "style": "margin-top:14px"},
+                        ui.input_text("pid_search", "Search by PID", placeholder="Enter user ID"),
+                    ),
+                    ui.tags.div(
+                        {"class": "gds-table-wrapper"},
+                        ui.output_data_frame("users_table"),
+                    ),
+                ),
+                # -------------------- Tenancies --------------------
+                ui.nav_panel(
+                    "Tenancies",
+                    ui.tags.div(
+                        {"class": "gds-table-wrapper"},
+                        ui.output_data_frame("tenancies_table"),
+                    ),
+                ),
             ),
-            ui.input_text("pid_search", "Search by PID", placeholder="Enter user ID"),
-            ui.output_data_frame("users_table"),
-        ),
-        # -------------------- Tenancies --------------------
-        ui.nav_panel(
-            "Tenancies",
-            ui.output_data_frame("tenancies_table"),
         ),
     ),
 )
