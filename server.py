@@ -519,8 +519,13 @@ def server(input, output, session):
 
         final = pd.concat([out, totals], ignore_index=True)
         final = final[["Tenancy", "Component", "Assigned licences", "Active licences"]]
-        final.columns = ["Tenancy ▲", "Component", "Assigned Licences", "Active Licences"]
-        sorted_df = final.sort_values(["Tenancy ▲", "Component"])
+        final.columns = [
+            "Tenancy <span class='default-chevron'>&#9650;</span>",
+            "Component",
+            "Assigned Licences",
+            "Active Licences",
+        ]
+        sorted_df = final.sort_values(final.columns.to_list()[:2])
         return sorted_df
 
     # ------------------------------------------------------------------
@@ -724,14 +729,28 @@ def server(input, output, session):
         df = filtered_users_by_pid().copy()
         if df.empty:
             return pd.DataFrame(
-                columns=["User ID", "Tenancy", "Component", "Environment", "Last login ▼", "Login count"]
+                columns=[
+                    "User ID",
+                    "Tenancy",
+                    "Component",
+                    "Environment",
+                    "Last login <span class='default-chevron'>&#9660;</span>",
+                    "Login count",
+                ]
             )
 
         df = df.sort_values("lastLogin", ascending=False)
         out = df[
             ["userId", "tenancy", "component", "environment", "lastLogin", "loginCount"]
         ].copy()
-        out.columns = ["User ID", "Tenancy", "Component", "Environment", "Last login ▼", "Login count"]
+        out.columns = [
+            "User ID",
+            "Tenancy",
+            "Component",
+            "Environment",
+            "Last login <span class='default-chevron'>&#9660;</span>",
+            "Login count",
+        ]
         return out
 
     # ------------------------------------------------------------------
@@ -795,7 +814,7 @@ def server(input, output, session):
 
         display = pd.DataFrame(
             {
-                "Tenancy ▲": out["tenancy"],
+                "Tenancy <span class='default-chevron'>&#9650;</span>": out["tenancy"],
                 "Total users": get("totalUsers_Connect") + get("totalUsers_Workbench"),
                 "Active users": get("activeUsersComponent_Connect")
                 + get("activeUsersComponent_Workbench"),
@@ -806,5 +825,5 @@ def server(input, output, session):
             }
         )
 
-        sorted_df = display.sort_values("Tenancy ▲")
+        sorted_df = display.sort_values(display.columns[0])
         return sorted_df

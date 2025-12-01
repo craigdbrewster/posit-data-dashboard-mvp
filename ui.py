@@ -21,19 +21,21 @@ def panel_card(title, body):
     """Panel wrapper matching the React mock styling."""
     return ui.tags.div(
         {"class": "gds-panel"},
-        ui.tags.div({"class": "gds-panel__title"}, title),
+        ui.tags.h2({"class": "gds-panel__title govuk-heading-m"}, title),
         body,
     )
 
 
 app_ui = ui.page_fluid(
     ui.tags.head(
+        ui.tags.title("Posit Platform Analytics"),
         ui.tags.link(
             rel="stylesheet",
             href="https://unpkg.com/govuk-frontend@4.7.0/dist/govuk/all.css",
         ),
         ui.tags.script(src="https://unpkg.com/govuk-frontend@4.7.0/dist/govuk/all.js"),
         ui.tags.script("window.GOVUKFrontend && window.GOVUKFrontend.initAll();"),
+        ui.tags.script("document.documentElement.setAttribute('lang','en');"),
         ui.tags.style(
             """
             :root {
@@ -184,6 +186,15 @@ app_ui = ui.page_fluid(
             .dataTables_wrapper .dataTables_scrollBody table {
                 width: 100% !important;
             }
+            .default-chevron {
+                font-size: 12px;
+                margin-left: 4px;
+                color: #505a5f;
+            }
+            table.dataTable thead th.sorting_desc .default-chevron,
+            table.dataTable thead th.sorting_asc .default-chevron {
+                display: none;
+            }
             .gds-secondary {
                 color: var(--gds-muted);
                 font-size: 15px;
@@ -263,8 +274,8 @@ app_ui = ui.page_fluid(
             """
         ),
     ),
-    ui.tags.div(
-        {"class": "govuk-width-container zenith-app"},
+    ui.tags.main(
+        {"class": "govuk-width-container zenith-app", "role": "main"},
         ui.tags.header(
             {"class": "zenith-hero"},
             ui.tags.span({"class": "govuk-caption-l"}, "Platform analytics"),
@@ -317,7 +328,7 @@ app_ui = ui.page_fluid(
                         {"class": "gds-card-grid"},
                         metric_card(
                             "Total users",
-                            ui.h3(f"{data.TOTAL_USERS:,}", class_="m-0"),
+                            f"{data.TOTAL_USERS:,}",
                             ui.output_text("overview_total_users_change"),
                         ),
                         metric_card(
