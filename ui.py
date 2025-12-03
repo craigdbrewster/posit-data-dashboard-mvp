@@ -27,15 +27,30 @@ def panel_card(title, body):
 
 
 app_ui = ui.page_fluid(
-    ui.tags.head(
-        ui.tags.title("Posit Platform Analytics"),
-        ui.tags.link(
-            rel="stylesheet",
-            href="https://unpkg.com/govuk-frontend@4.7.0/dist/govuk/all.css",
+        ui.tags.head(
+            ui.tags.title("Posit Platform Analytics"),
+            ui.tags.link(
+                rel="stylesheet",
+                href="https://unpkg.com/govuk-frontend@4.7.0/dist/govuk/all.css",
         ),
         ui.tags.script(src="https://unpkg.com/govuk-frontend@4.7.0/dist/govuk/all.js"),
         ui.tags.script("window.GOVUKFrontend && window.GOVUKFrontend.initAll();"),
         ui.tags.script("document.documentElement.setAttribute('lang','en');"),
+        ui.tags.script(
+            """
+            document.addEventListener('DOMContentLoaded', function() {
+                const stripAria = () => {
+                    document.querySelectorAll('table[aria-multiselectable]').forEach((tbl) => {
+                        tbl.removeAttribute('aria-multiselectable');
+                    });
+                };
+                stripAria();
+                document.addEventListener('shiny:domupdate', stripAria);
+                const observer = new MutationObserver(stripAria);
+                observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+            });
+            """
+        ),
         ui.tags.style(
             """
             :root {
@@ -269,14 +284,30 @@ app_ui = ui.page_fluid(
                 display: grid;
                 grid-template-columns: 1fr auto;
                 align-items: center;
-                gap: 10px;
-                margin-bottom: 10px;
+                gap: 16px;
+                margin-bottom: 14px;
             }
             .gds-dist-label {
                 font-weight: 600;
             }
             .gds-dist-val {
                 color: var(--gds-muted);
+                font-weight: 600;
+            }
+            .users-top-row {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 14px;
+                align-items: stretch;
+            }
+            .users-metric-stack {
+                display: grid;
+                grid-template-rows: repeat(3, 1fr);
+                gap: 10px;
+                height: 100%;
+            }
+            .users-metric-stack .gds-card {
+                height: 100%;
             }
             """
         ),
@@ -285,12 +316,17 @@ app_ui = ui.page_fluid(
         {"class": "govuk-width-container zenith-app", "role": "main"},
         ui.tags.header(
             {"class": "zenith-hero"},
-            ui.tags.span({"class": "govuk-caption-l"}, "Platform analytics"),
             ui.tags.h1("Posit Platform Analytics", class_="govuk-heading-l"),
             ui.tags.p(
-                "Track adoption, licences, and tenancy engagement with a GDS-aligned interface.",
+                "Track usage, licences, and tenancy engagement.",
                 class_="gds-secondary",
             ),
+        ),
+        ui.tags.div(
+            {
+                "style": "width:100%;height:200px;background:#e5e5e5;border:1px solid #d0d0d0;border-radius:8px;padding:14px 16px;margin:8px 0 12px;font-weight:600;color:#505a5f;"
+            },
+            "North star metric",
         ),
         ui.tags.div(
             {"class": "gds-filter-bar"},
@@ -328,42 +364,47 @@ app_ui = ui.page_fluid(
         ui.tags.div(
             {"class": "gds-tabs"},
             ui.navset_tab(
-                # -------------------- Overview --------------------
+                # -------------------- Users --------------------
                 ui.nav_panel(
-                    "Overview",
+                    "Users",
                     ui.tags.div(
-                        {"class": "gds-card-grid"},
-                        metric_card(
-                            "Total users",
-                            f"{data.TOTAL_USERS:,}",
-                            ui.output_text("overview_total_users_change"),
+                        {"class": "users-top-row"},
+                        ui.tags.div(
+                            {"class": "users-metric-stack"},
+                            metric_card(
+                                "Total users",
+                                ui.output_text("users_total"),
+                                ui.output_text("overview_total_users_change"),
+                            ),
+                            metric_card(
+                                "New users",
+                                ui.output_text("overview_new_users"),
+                                ui.output_text("overview_new_users_change"),
+                            ),
+                            metric_card(
+                                "Active users",
+                                ui.output_text("users_active"),
+                                ui.output_text("users_active_change"),
+                            ),
                         ),
-                        metric_card(
-                            "Active users",
-                            ui.output_text("overview_active_users"),
-                            ui.output_text("overview_active_users_change"),
-                        ),
-                        metric_card(
-                            "New users",
-                            ui.output_text("overview_new_users"),
-                            ui.output_text("overview_new_users_change"),
-                        ),
-                        metric_card(
-                            "Total session hours",
-                            ui.output_text("overview_session_hours"),
-                            ui.output_text("overview_session_hours_change"),
+                        ui.tags.div(
+                            {"class": "gds-panel"},
+                            ui.tags.div({"class": "gds-panel__title govuk-heading-m"}, "Usage frequency"),
+                            ui.output_ui("users_distribution"),
                         ),
                     ),
                     ui.tags.div(
-                        {"class": "gds-panel-grid"},
-                        panel_card(
-                            "Active users & session hours by week",
-                            ui.output_ui("overview_timeseries"),
-                        ),
-                        panel_card(
-                            "Active users & session hours by tenancy",
-                            ui.output_ui("overview_tenancy_bars"),
-                        ),
+                        {"class": "gds-panel", "style": "margin-top:8px;"},
+                        ui.tags.div({"class": "gds-panel__title govuk-heading-m"}, "Session engagement trend"),
+                        ui.output_ui("users_engagement_trend"),
+                    ),
+                    ui.tags.div(
+                        {"class": "gds-filter-bar", "style": "margin-top:14px"},
+                        ui.input_text("pid_search", "Search by PID", placeholder="Enter user ID"),
+                    ),
+                    ui.tags.div(
+                        {"class": "gds-table-wrapper"},
+                        ui.output_data_frame("users_table"),
                     ),
                 ),
                 # -------------------- Licences --------------------
@@ -392,52 +433,16 @@ app_ui = ui.page_fluid(
                     ),
                     ui.tags.div({"class": "gds-table-wrapper"}, ui.output_data_frame("lic_table")),
                 ),
-                # -------------------- Users --------------------
-                ui.nav_panel(
-                    "Users",
-                    ui.tags.div(
-                        {"class": "gds-card-grid"},
-                        metric_card(
-                            "Daily users",
-                            ui.output_text("users_daily"),
-                            ui.output_text("users_daily_change"),
-                        ),
-                        metric_card(
-                            "Weekly users",
-                            ui.output_text("users_weekly"),
-                            ui.output_text("users_weekly_change"),
-                        ),
-                        metric_card(
-                            "Active users in period",
-                            ui.output_text("users_active"),
-                            ui.output_text("users_active_change"),
-                        ),
-                        metric_card(
-                            "Dormant users",
-                            ui.output_text("users_dormant"),
-                            ui.output_text("users_dormant_change"),
-                        ),
-                    ),
-                    ui.tags.div(
-                        {"class": "gds-panel-grid"},
-                        panel_card("Usage distribution", ui.output_ui("users_distribution")),
-                        panel_card(
-                            "Session engagement metrics",
-                            ui.output_ui("users_session_metrics"),
-                        ),
-                    ),
-                    ui.tags.div(
-                        {"class": "gds-filter-bar", "style": "margin-top:14px"},
-                        ui.input_text("pid_search", "Search by PID", placeholder="Enter user ID"),
-                    ),
-                    ui.tags.div(
-                        {"class": "gds-table-wrapper"},
-                        ui.output_data_frame("users_table"),
-                    ),
-                ),
                 # -------------------- Tenancies --------------------
                 ui.nav_panel(
                     "Tenancies",
+                    ui.tags.div(
+                        {"class": "gds-panel-grid", "style": "margin-bottom:12px"},
+                        panel_card(
+                            "Active users & session hours by tenancy",
+                            ui.output_ui("overview_tenancy_bars"),
+                        ),
+                    ),
                     ui.tags.div(
                         {"class": "gds-table-wrapper"},
                         ui.output_data_frame("tenancies_table"),

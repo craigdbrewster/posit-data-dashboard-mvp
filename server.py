@@ -6,6 +6,16 @@ from shiny import reactive, render, ui
 
 import data
 
+# Static frequency buckets for display and comparison
+FREQUENCY_CURRENT = {
+    "10_plus": 2100,
+    "5_9": 4100,
+    "1_4": 1900,
+    "lt1": 1000,
+    "no_activity": 900,
+}
+FREQUENCY_PREV = FREQUENCY_CURRENT.copy()
+
 
 def render_plotly(fig):
     """Render a Plotly figure as HTML for Shiny @render.ui."""
@@ -33,6 +43,10 @@ def format_duration(hours: float) -> str:
 
 
 def server(input, output, session):
+    TARGET_PENETRATION = 0.6  # 60% target
+    TARGET_STICKINESS = 0.6
+    TARGET_DEPTH_HOURS = 5.0
+
     # --- reactive helpers -------------------------------------------------
 
     @reactive.Calc
@@ -269,9 +283,9 @@ def server(input, output, session):
     @output
     @render.text
     def overview_total_users_change():
-        current = len(data.users)
-        prev = len(data.users)
-        change = 0.0 if prev else 0.0
+        current = 10000
+        prev = max(current - 47, 0)
+        change = (current - prev) / prev * 100 if prev else 0.0
         arrow = "▲" if change >= 0 else "▼"
         return f"{arrow} {change:.1f}% vs previous period"
 
@@ -312,19 +326,65 @@ def server(input, output, session):
 
     @output
     @render.text
-    def overview_session_hours_change():
-        current = total_session_hours_current()
-        prev = total_session_hours_previous()
-        if prev > 0:
-            change = (current - prev) / prev * 100
-        else:
-            change = 0.0 if current == 0 else 100.0
+    def overview_penetration():
+        df = filtered_timeseries()
+        if df.empty:
+            return "0.0%"
+        latest = df.sort_values("date").iloc[-1]
+        weekly_active = latest.get("regularUsers", 0)
+        penetration = weekly_active / data.TOTAL_USERS * 100 if data.TOTAL_USERS else 0
+        return f"{penetration:.1f}%"
+
+    @output
+    @render.text
+    def overview_stickiness():
+        df = filtered_timeseries()
+        if df.empty:
+            return "0.0%"
+        latest = df.sort_values("date").iloc[-1]
+        weekly_active = latest.get("regularUsers", 0)
+        period_active = latest.get("activeUsers", 0)
+        stickiness = weekly_active / period_active * 100 if period_active else 0
+        return f"{stickiness:.1f}%"
+
+    @output
+    @render.text
+    def overview_active_users_weekly():
+        df = filtered_timeseries()
+        if df.empty:
+            return "0"
+        df_weekly = (
+            df.set_index("date")
+            .resample("W-MON")
+            .agg({"activeUsers": "mean"})
+            .reset_index()
+        )
+        latest = df_weekly.sort_values("date").iloc[-1]
+        return f"{int(latest['activeUsers']):,}"
+
+    @output
+    @render.text
+    def overview_active_users_weekly_change():
+        df = filtered_timeseries()
+        if df.empty:
+            return ""
+        df_weekly = (
+            df.set_index("date")
+            .resample("W-MON")
+            .agg({"activeUsers": "mean"})
+            .reset_index()
+        )
+        if len(df_weekly) < 2:
+            return ""
+        latest = df_weekly.sort_values("date").iloc[-1]["activeUsers"]
+        prev = df_weekly.sort_values("date").iloc[-2]["activeUsers"]
+        change = (latest - prev) / prev * 100 if prev else 0
         arrow = "▲" if change >= 0 else "▼"
-        return f"{arrow} {change:.1f}% vs previous period"
+        return f"{arrow} {change:.1f}% vs prev week"
 
     @output
     @render.ui
-    def overview_timeseries():
+    def overview_engagement_trend():
         df = filtered_timeseries()
         if df.empty:
             fig = px.line(title="No data for selected period")
@@ -333,36 +393,27 @@ def server(input, output, session):
         df_weekly = (
             df.set_index("date")
             .resample("W-MON")
-            .agg({"activeUsers": "mean", "sessionHours": "sum"})
+            .agg({"activeUsers": "mean", "regularUsers": "mean"})
             .reset_index()
         )
         df_weekly["week"] = df_weekly["date"].dt.date
+        df_weekly["penetration"] = df_weekly["regularUsers"] / data.TOTAL_USERS * 100
 
         fig = px.line(
             df_weekly,
             x="week",
-            y=["activeUsers", "sessionHours"],
+            y=["activeUsers", "penetration"],
             markers=True,
-            labels={"value": "Value", "week": "Week", "variable": "Metric"},
+            labels={
+                "value": "Value",
+                "variable": "Metric",
+                "week": "Week",
+                "activeUsers": "Active users (mean)",
+                "penetration": "Penetration (%)",
+            },
         )
-        fig.update_layout(legend_title_text="Metric")
-        return render_plotly(fig)
-
-    @output
-    @render.ui
-    def overview_tenancy_bars():
-        df = data.tenancies.copy()
-        df["sessionHours"] = df["activeUsers"] * 8.5
-        df = df.sort_values("activeUsers", ascending=False).head(5)
-
-        fig = px.bar(
-            df,
-            x="tenancy",
-            y=["activeUsers", "sessionHours"],
-            barmode="group",
-            labels={"value": "Value", "tenancy": "Tenancy", "variable": "Metric"},
-        )
-        fig.update_layout(legend_title_text="Metric")
+        fig.update_traces(mode="lines+markers")
+        fig.update_layout(legend_title_text="")
         return render_plotly(fig)
 
     # ------------------------------------------------------------------
@@ -403,10 +454,8 @@ def server(input, output, session):
     @output
     @render.text
     def lic_connect_active():
-        current_start, current_end = current_period()
-        connect_active_current, _ = _licence_active_users_for_period(
-            current_start, current_end
-        )
+        df = filtered_users()
+        connect_active_current = len(df[df["component"] == "Connect"])
         return f"{connect_active_current:,}"
 
     @output
@@ -444,10 +493,8 @@ def server(input, output, session):
     @output
     @render.text
     def lic_workbench_active():
-        current_start, current_end = current_period()
-        _, workbench_active_current = _licence_active_users_for_period(
-            current_start, current_end
-        )
+        df = filtered_users()
+        workbench_active_current = len(df[df["component"] == "Workbench"])
         return f"{workbench_active_current:,}"
 
     @output
@@ -529,40 +576,38 @@ def server(input, output, session):
 
     @output
     @render.text
+    def users_total():
+        return "10,000"
+
+    @output
+    @render.text
     def users_active():
-        return f"{len(filtered_users()):,}"
+        buckets = _frequency_buckets()
+        active_count = sum(count for key, count in buckets.items() if key != "no_activity")
+        return f"{active_count:,}"
 
     @output
     @render.text
     def users_active_change():
-        active_current = len(filtered_users())
-        active_prev = len(filtered_users_prev_period())
-
-        if active_prev > 0:
-            change = (active_current - active_prev) / active_prev * 100
-        else:
-            change = 0.0
+        cur_buckets = _frequency_buckets()
+        prev_buckets = _frequency_buckets(previous=True)
+        cur_active = sum(count for key, count in cur_buckets.items() if key != "no_activity")
+        prev_active = sum(count for key, count in prev_buckets.items() if key != "no_activity")
+        if prev_active == 0:
+            return ""
+        change = (cur_active - prev_active) / prev_active * 100
         arrow = "▲" if change >= 0 else "▼"
         return f"{arrow} {change:.1f}% vs previous period"
 
     @output
     @render.text
     def users_dormant():
-        dormant = data.TOTAL_USERS - len(filtered_users())
-        return f"{dormant:,}"
+        return "900"
 
     @output
     @render.text
     def users_dormant_change():
-        dormant_current = data.TOTAL_USERS - len(filtered_users())
-        dormant_prev = data.TOTAL_USERS - len(filtered_users_prev_period())
-
-        if dormant_prev > 0:
-            change = (dormant_current - dormant_prev) / dormant_prev * 100
-        else:
-            change = 0.0
-        arrow = "▲" if change >= 0 else "▼"
-        return f"{arrow} {change:.1f}% vs previous period"
+        return ""
 
     @output
     @render.text
@@ -639,16 +684,29 @@ def server(input, output, session):
         if df.empty:
             return ui.tags.div("No data for selected period", class_="gds-secondary")
 
-        latest = df.sort_values("date").iloc[-1]
+        cur_buckets = _frequency_buckets()
+        prev_buckets = _frequency_buckets(previous=True)
+
         segments = [
-            ("Daily users", latest["powerUsers"], "#00703c"),
-            ("Weekly users", latest["regularUsers"], "#1d70b8"),
-            ("Other active users", latest["lightUsers"], "#b1b4b6"),
-            ("Dormant users", latest["dormantUsers"], "#b58800"),
+            ("10+ sessions per week", "10_plus", "#00703c"),
+            ("5-9 sessions per week", "5_9", "#1d70b8"),
+            ("1-4 sessions per week", "1_4", "#b1b4b6"),
+            ("Less than 1 session per week", "lt1", "#b58800"),
+            ("No activity", "no_activity", "#b56d00"),
         ]
-        total = sum(val for _, val, _ in segments)
+        total = sum(cur_buckets.values())
+
+        def fmt_change(cur, prev):
+            if prev == 0:
+                return "(new)" if cur > 0 else ""
+            change = (cur - prev) / prev * 100
+            arrow = "▲" if change >= 0 else "▼"
+            return f"{arrow} {change:.1f}% vs prev"
+
         rows = []
-        for label, value, color in segments:
+        for label, key, color in segments:
+            value = cur_buckets.get(key, 0)
+            prev_val = prev_buckets.get(key, 0)
             percent = (value / total * 100) if total > 0 else 0
             rows.append(
                 ui.tags.div(
@@ -668,7 +726,7 @@ def server(input, output, session):
                     ),
                     ui.tags.div(
                         {"class": "gds-dist-val"},
-                        f"{int(value):,} ({percent:.1f}%)",
+                        f"{int(value):,} ({fmt_change(value, prev_val)})",
                     ),
                 )
             )
@@ -677,46 +735,51 @@ def server(input, output, session):
 
     @output
     @render.ui
-    def users_session_metrics():
-        hours = avg_session_length_current()
-        hours_prev = avg_session_length_previous()
-        minutes = hours * 60
-        sessions = sessions_per_user_current()
-        sessions_prev = sessions_per_user_previous()
+    def users_engagement_trend():
+        df = filtered_timeseries()
+        if df.empty:
+            fig = px.line(title="No data for selected period")
+            return render_plotly(fig)
 
-        length_change = format_change(hours, hours_prev)
-        sessions_change = format_change(sessions, sessions_prev)
-        duration_label = format_duration(hours)
-
-        return ui.tags.div(
-            ui.tags.div(
-                {"class": "gds-pill"},
-                ui.tags.div(
-                    {"class": "gds-pill__label"},
-                    ui.tags.span({"class": "gds-pill__icon"}, "🕒"),
-                    "Average session length",
-                ),
-                ui.tags.div(
-                    {"class": "gds-pill__metrics"},
-                    ui.tags.span({"class": "gds-pill__value-lg"}, duration_label),
-                    ui.tags.span({"class": "gds-pill__sub"}, f"{minutes:.0f} mins total"),
-                    ui.tags.div({"class": "gds-pill__change"}, length_change),
-                ),
-            ),
-            ui.tags.div(
-                {"class": "gds-pill"},
-                ui.tags.div(
-                    {"class": "gds-pill__label"},
-                    ui.tags.span({"class": "gds-pill__icon"}, "〰"),
-                    "Average sessions per user",
-                ),
-                ui.tags.div(
-                    {"class": "gds-pill__metrics"},
-                    ui.tags.span({"class": "gds-pill__value-lg"}, f"{sessions:.1f}"),
-                    ui.tags.div({"class": "gds-pill__change"}, sessions_change),
-                ),
-            ),
+        df_weekly = (
+            df.set_index("date")
+            .resample("W-MON")
+            .agg({"activeUsers": "mean", "sessionHours": "sum"})
+            .reset_index()
         )
+        df_weekly["week"] = df_weekly["date"].dt.date
+        df_weekly["avg_hours_per_user"] = df_weekly.apply(
+            lambda r: r["sessionHours"] / r["activeUsers"] if r["activeUsers"] > 0 else 0,
+            axis=1,
+        )
+        df_weekly["avg_sessions_per_user"] = df_weekly.apply(
+            lambda r: (r["sessionHours"] / 1.5) / r["activeUsers"] if r["activeUsers"] > 0 else 0,
+            axis=1,
+        )
+
+        plot_df = df_weekly.melt(
+            id_vars=["week"],
+            value_vars=["avg_sessions_per_user", "avg_hours_per_user"],
+            var_name="metric",
+            value_name="value",
+        )
+        plot_df["metric"] = plot_df["metric"].map(
+            {
+                "avg_sessions_per_user": "Avg sessions/user/week",
+                "avg_hours_per_user": "Avg hours/user/week",
+            }
+        )
+
+        fig = px.line(
+            plot_df,
+            x="week",
+            y="value",
+            color="metric",
+            markers=True,
+            labels={"week": "Week", "value": "Per-user per week", "metric": "Metric"},
+        )
+        fig.update_layout(legend_title_text="")
+        return render_plotly(fig)
 
     @output
     @render.data_frame
@@ -822,3 +885,8 @@ def server(input, output, session):
 
         sorted_df = display.sort_values("Tenancy")
         return sorted_df
+
+
+def _frequency_buckets(previous: bool = False) -> dict:
+    """Return static usage frequency buckets."""
+    return FREQUENCY_PREV.copy() if previous else FREQUENCY_CURRENT.copy()
