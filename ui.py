@@ -26,11 +26,36 @@ def panel_card(title, body):
     )
 
 
+def rag_card(title, text, target, actual):
+    """Simple RAG card with target/actual."""
+    try:
+        target_val = float(target)
+        actual_val = float(actual)
+    except Exception:
+        target_val = actual_val = 0.0
+    if actual_val >= target_val:
+        status_class = "rag-good"
+    elif actual_val >= 0.9 * target_val:
+        status_class = "rag-warn"
+    else:
+        status_class = "rag-bad"
+    return ui.tags.div(
+        {"class": f"rag-card {status_class}", "role": "group", "aria-label": title},
+        ui.tags.div({"class": "rag-card__title"}, title),
+        ui.tags.div({"class": "rag-card__text"}, text),
+        ui.tags.div(
+            {"class": "rag-card__metrics"},
+            ui.tags.span({"class": "rag-card__label"}, f"Target: {target}"),
+            ui.tags.span({"class": "rag-card__label"}, f"Actual: {actual}"),
+        ),
+    )
+
+
 app_ui = ui.page_fluid(
-        ui.tags.head(
-            ui.tags.title("Posit Platform Analytics"),
-            ui.tags.link(
-                rel="stylesheet",
+    ui.tags.head(
+        ui.tags.title("Posit Platform Analytics"),
+        ui.tags.link(
+            rel="stylesheet",
                 href="https://unpkg.com/govuk-frontend@4.7.0/dist/govuk/all.css",
         ),
         ui.tags.script(src="https://unpkg.com/govuk-frontend@4.7.0/dist/govuk/all.js"),
@@ -294,6 +319,50 @@ app_ui = ui.page_fluid(
                 color: var(--gds-muted);
                 font-weight: 600;
             }
+            .rag-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                gap: 12px;
+                margin: 12px 0 8px;
+            }
+            .rag-card {
+                border-radius: 8px;
+                padding: 12px 14px;
+                border: 1px solid #b1b4b6;
+            }
+            .rag-card__title {
+                font-weight: 700;
+                margin: 0 0 6px;
+                font-size: 18px;
+            }
+            .rag-card__text {
+                color: var(--gds-muted);
+                margin: 0 0 6px;
+            }
+            .rag-card__metrics {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+                font-weight: 600;
+            }
+            .rag-card__label {
+                display: block;
+            }
+            .rag-good {
+                background: #dff0d8;
+                border-color: #6ab46f;
+                color: #0b0c0c;
+            }
+            .rag-warn {
+                background: #fff2cc;
+                border-color: #ffbf47;
+                color: #0b0c0c;
+            }
+            .rag-bad {
+                background: #f3dcdc;
+                border-color: #d4351c;
+                color: #0b0c0c;
+            }
             .users-top-row {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
@@ -349,13 +418,22 @@ app_ui = ui.page_fluid(
             ),
         ),
         ui.tags.div(
-            {
-                "style": "width:100%;height:200px;background:#ffffff;border:1px solid #d0d0d0;border-radius:8px;padding:14px 16px;margin:8px 0 12px;font-weight:600;color:#505a5f;"
-            },
-            "North star metrics",
+            {"class": "rag-grid", "style": "margin-bottom:12px;"},
+            rag_card("Uptake", "Avg new users per week", target=10, actual=12),
+            rag_card("Frequency", "Avg sessions per user per week", target=4, actual=2),
+            rag_card("Engagement", "Avg hours per user per week", target=10, actual=20),
         ),
         ui.tags.div(
             {"class": "gds-filter-bar"},
+            ui.input_date_range(
+                "dates",
+                "Date range",
+                start=data.default_start,
+                end=data.default_end,
+                min=data.min_date.date(),
+                max=data.max_date.date(),
+                width="100%",
+            ),
             ui.input_select(
                 "tenancy",
                 "Tenancy",
@@ -375,15 +453,6 @@ app_ui = ui.page_fluid(
                 "Component",
                 choices=data.component_choices(),
                 selected="All Components",
-                width="100%",
-            ),
-            ui.input_date_range(
-                "dates",
-                "Date range",
-                start=data.default_start,
-                end=data.default_end,
-                min=data.min_date.date(),
-                max=data.max_date.date(),
                 width="100%",
             ),
         ),

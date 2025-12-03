@@ -46,6 +46,7 @@ def server(input, output, session):
     TARGET_PENETRATION = 0.6  # 60% target
     TARGET_STICKINESS = 0.6
     TARGET_DEPTH_HOURS = 5.0
+    TOTAL_ACTIVE_BASE = 9100
 
     # --- reactive helpers -------------------------------------------------
 
@@ -454,9 +455,21 @@ def server(input, output, session):
     @output
     @render.text
     def lic_connect_active():
-        df = filtered_users()
-        connect_active_current = len(df[df["component"] == "Connect"])
-        return f"{connect_active_current:,}"
+        lic_df = data.licences.copy()
+        tenancy_val = input.tenancy()
+        comp_val = input.component()
+        if tenancy_val != "All Tenancies":
+            lic_df = lic_df[lic_df["tenancy"] == tenancy_val]
+        if comp_val != "All Components":
+            lic_df = lic_df[lic_df["component"] == comp_val]
+        total_assigned = lic_df["licencesUsed"].sum()
+        overall_assigned = data.licences["licencesUsed"].sum()
+        pool = TOTAL_ACTIVE_BASE * (total_assigned / overall_assigned) if overall_assigned else 0
+        comp_totals = lic_df.groupby("component")["licencesUsed"].sum()
+        connect_total = comp_totals.get("Connect", 0)
+        comp_sum = comp_totals.sum()
+        connect_active_current = pool * (connect_total / comp_sum) if comp_sum else 0
+        return f"{int(round(connect_active_current)):,}"
 
     @output
     @render.text
@@ -493,9 +506,21 @@ def server(input, output, session):
     @output
     @render.text
     def lic_workbench_active():
-        df = filtered_users()
-        workbench_active_current = len(df[df["component"] == "Workbench"])
-        return f"{workbench_active_current:,}"
+        lic_df = data.licences.copy()
+        tenancy_val = input.tenancy()
+        comp_val = input.component()
+        if tenancy_val != "All Tenancies":
+            lic_df = lic_df[lic_df["tenancy"] == tenancy_val]
+        if comp_val != "All Components":
+            lic_df = lic_df[lic_df["component"] == comp_val]
+        total_assigned = lic_df["licencesUsed"].sum()
+        overall_assigned = data.licences["licencesUsed"].sum()
+        pool = TOTAL_ACTIVE_BASE * (total_assigned / overall_assigned) if overall_assigned else 0
+        comp_totals = lic_df.groupby("component")["licencesUsed"].sum()
+        wb_total = comp_totals.get("Workbench", 0)
+        comp_sum = comp_totals.sum()
+        workbench_active_current = pool * (wb_total / comp_sum) if comp_sum else 0
+        return f"{int(round(workbench_active_current)):,}"
 
     @output
     @render.text
