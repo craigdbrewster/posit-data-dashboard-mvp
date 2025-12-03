@@ -514,7 +514,7 @@ def server(input, output, session):
         return f"{arrow} {change:.1f}% vs previous period"
 
     @output
-    @render.data_frame
+    @render.ui
     def lic_table():
         tenancy_val = input.tenancy()
         comp_val = input.component()
@@ -557,18 +557,12 @@ def server(input, output, session):
             }
         )
 
-        totals = (
-            out.groupby("Component")[["Assigned licences", "Active licences"]]
-            .sum()
-            .reset_index()
-        )
-        totals["Tenancy"] = "Total"
-
-        final = pd.concat([out, totals], ignore_index=True)
-        final = final[["Tenancy", "Component", "Assigned licences", "Active licences"]]
+        final = out[["Tenancy", "Component", "Assigned licences", "Active licences"]]
         final.columns = ["Tenancy", "Component", "Assigned Licences", "Active Licences"]
-        sorted_df = final.sort_values(["Tenancy", "Component"])
-        return sorted_df
+        html = final.sort_values(["Tenancy", "Component"]).to_html(
+            index=False, classes="full-table", border=0
+        )
+        return ui.HTML(html)
 
     # ------------------------------------------------------------------
     # Users tab
@@ -726,7 +720,7 @@ def server(input, output, session):
                     ),
                     ui.tags.div(
                         {"class": "gds-dist-val"},
-                        f"{int(value):,} ({fmt_change(value, prev_val)})",
+                        f"{int(value):,} users ({fmt_change(value, prev_val)})",
                     ),
                 )
             )
@@ -782,13 +776,13 @@ def server(input, output, session):
         return render_plotly(fig)
 
     @output
-    @render.data_frame
+    @render.ui
     def users_table():
         df = filtered_users_by_pid().copy()
         if df.empty:
-            return pd.DataFrame(
+            empty_df = pd.DataFrame(
                 columns=[
-                    "User ID",
+                    "PID",
                     "Tenancy",
                     "Component",
                     "Environment",
@@ -796,6 +790,7 @@ def server(input, output, session):
                     "Login count",
                 ]
             )
+            return ui.HTML(empty_df.to_html(index=False, classes="full-table", border=0))
 
         df = df.sort_values("lastLogin", ascending=False)
         out = df[
@@ -809,14 +804,34 @@ def server(input, output, session):
             "Last login",
             "Login count",
         ]
-        return out
+        return ui.HTML(out.to_html(index=False, classes="full-table", border=0))
 
     # ------------------------------------------------------------------
     # Tenancies tab
     # ------------------------------------------------------------------
 
     @output
-    @render.data_frame
+    @render.ui
+    def overview_tenancy_bars():
+        df = data.tenancies.copy()
+        if df.empty:
+            fig = px.bar(title="No data for selected period")
+            return render_plotly(fig)
+        df["sessionHours"] = df["activeUsers"] * 8.5
+        df = df.sort_values("activeUsers", ascending=False).head(5)
+
+        fig = px.bar(
+            df,
+            x="tenancy",
+            y=["activeUsers", "sessionHours"],
+            barmode="group",
+            labels={"value": "Value", "tenancy": "Tenancy", "variable": "Metric"},
+        )
+        fig.update_layout(legend_title_text="Metric")
+        return render_plotly(fig)
+
+    @output
+    @render.ui
     def tenancies_table():
         tenancy_val = input.tenancy()
         comp_val = input.component()
@@ -884,7 +899,7 @@ def server(input, output, session):
         )
 
         sorted_df = display.sort_values("Tenancy")
-        return sorted_df
+        return ui.HTML(sorted_df.to_html(index=False, classes="full-table", border=0))
 
 
 def _frequency_buckets(previous: bool = False) -> dict:

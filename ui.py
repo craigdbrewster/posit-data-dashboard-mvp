@@ -285,7 +285,7 @@ app_ui = ui.page_fluid(
                 grid-template-columns: 1fr auto;
                 align-items: center;
                 gap: 16px;
-                margin-bottom: 14px;
+                margin-bottom: 6px;
             }
             .gds-dist-label {
                 font-weight: 600;
@@ -309,6 +309,32 @@ app_ui = ui.page_fluid(
             .users-metric-stack .gds-card {
                 height: 100%;
             }
+            .usage-frequency-panel {
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+            }
+            .usage-frequency-list {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                gap: 14px;
+            }
+            .full-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 14px;
+            }
+            .full-table th,
+            .full-table td {
+                border: 1px solid #d0d0d0;
+                padding: 8px 10px;
+            }
+            .full-table th {
+                background: #f3f2f1;
+                font-weight: 700;
+                text-align: left;
+            }
             """
         ),
     ),
@@ -324,9 +350,9 @@ app_ui = ui.page_fluid(
         ),
         ui.tags.div(
             {
-                "style": "width:100%;height:200px;background:#e5e5e5;border:1px solid #d0d0d0;border-radius:8px;padding:14px 16px;margin:8px 0 12px;font-weight:600;color:#505a5f;"
+                "style": "width:100%;height:200px;background:#ffffff;border:1px solid #d0d0d0;border-radius:8px;padding:14px 16px;margin:8px 0 12px;font-weight:600;color:#505a5f;"
             },
-            "North star metric",
+            "North star metrics",
         ),
         ui.tags.div(
             {"class": "gds-filter-bar"},
@@ -388,14 +414,14 @@ app_ui = ui.page_fluid(
                             ),
                         ),
                         ui.tags.div(
-                            {"class": "gds-panel"},
-                            ui.tags.div({"class": "gds-panel__title govuk-heading-m"}, "Usage frequency"),
-                            ui.output_ui("users_distribution"),
+                            {"class": "gds-panel usage-frequency-panel"},
+                            ui.tags.div({"class": "gds-panel__title govuk-heading-m"}, "Frequency"),
+                            ui.tags.div({"class": "usage-frequency-list"}, ui.output_ui("users_distribution")),
                         ),
                     ),
                     ui.tags.div(
                         {"class": "gds-panel", "style": "margin-top:8px;"},
-                        ui.tags.div({"class": "gds-panel__title govuk-heading-m"}, "Session engagement trend"),
+                        ui.tags.div({"class": "gds-panel__title govuk-heading-m"}, "Engagement"),
                         ui.output_ui("users_engagement_trend"),
                     ),
                     ui.tags.div(
@@ -404,7 +430,7 @@ app_ui = ui.page_fluid(
                     ),
                     ui.tags.div(
                         {"class": "gds-table-wrapper"},
-                        ui.output_data_frame("users_table"),
+                        ui.output_ui("users_table"),
                     ),
                 ),
                 # -------------------- Licences --------------------
@@ -431,7 +457,7 @@ app_ui = ui.page_fluid(
                             ui.output_text("lic_workbench_active_change"),
                         ),
                     ),
-                    ui.tags.div({"class": "gds-table-wrapper"}, ui.output_data_frame("lic_table")),
+                    ui.tags.div({"class": "gds-table-wrapper"}, ui.output_ui("lic_table")),
                 ),
                 # -------------------- Tenancies --------------------
                 ui.nav_panel(
@@ -445,7 +471,7 @@ app_ui = ui.page_fluid(
                     ),
                     ui.tags.div(
                         {"class": "gds-table-wrapper"},
-                        ui.output_data_frame("tenancies_table"),
+                        ui.output_ui("tenancies_table"),
                     ),
                 ),
             ),
