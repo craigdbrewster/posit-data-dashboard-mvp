@@ -95,7 +95,7 @@ def server(input, output, session):
         if env_val != "All Environments":
             df = df[df["environment"] == env_val]
 
-        if comp_val != "All Components":
+        if comp_val and comp_val != "All Components":
             df = df[df["component"] == comp_val]
 
         df = df[(df["lastLogin"] >= start) & (df["lastLogin"] <= end)]
@@ -116,7 +116,7 @@ def server(input, output, session):
         if env_val != "All Environments":
             df = df[df["environment"] == env_val]
 
-        if comp_val != "All Components":
+        if comp_val and comp_val != "All Components":
             df = df[df["component"] == comp_val]
 
         df = df[(df["lastLogin"] >= start) & (df["lastLogin"] <= end)]
@@ -128,7 +128,48 @@ def server(input, output, session):
         df = data.timeseries[
             (data.timeseries["date"] >= start) & (data.timeseries["date"] <= end)
         ].copy()
+        # apply tenancy/environment filters using the usage log info
+        usage = usage_filtered()
+        if usage.empty:
+            return df.iloc[0:0]
+        df = (
+            usage.assign(date=usage["login_time"].dt.normalize())
+            .groupby("date", as_index=False)
+            .agg(
+                activeUsers=("user_id", "nunique"),
+                regularUsers=("user_id", "nunique"),
+                powerUsers=("user_id", "nunique"),
+                sessionHours=("session_length_hours", "sum"),
+            )
+        )
         return df
+
+    def usage_filtered():
+        start, end = current_period()
+        usage = data.usage_log[
+            (data.usage_log["login_time"] >= start) & (data.usage_log["login_time"] <= end)
+        ].copy()
+        tenancy_val = input.tenancy()
+        env_val = input.environment()
+        comp_val = user_component()
+        if tenancy_val != "All Tenancies":
+            usage = usage[usage["tenancy"] == tenancy_val]
+        if env_val != "All Environments":
+            usage = usage[usage["environment"] == env_val]
+        if comp_val and comp_val != "All Components":
+            usage = usage[usage["component"] == comp_val]
+        return usage
+
+    @reactive.Calc
+    def tenancy_usage():
+        start, end = current_period()
+        usage = data.usage_log[
+            (data.usage_log["login_time"] >= start) & (data.usage_log["login_time"] <= end)
+        ].copy()
+        env_val = input.tenancy_environment()
+        if env_val != "All Environments":
+            usage = usage[usage["environment"] == env_val]
+        return usage
 
     @reactive.Calc
     def filtered_users_by_pid():
@@ -565,14 +606,17 @@ def server(input, output, session):
     @output
     @render.ui
     def users_hours_pie():
-        df = filtered_users()
+        usage = usage_filtered()
         start, end = current_period()
         days = max((end - start).days + 1, 1)
         weeks = max(days / 7, 1)
-        if df.empty:
+        if usage.empty:
             return ui.tags.div("No data for selected period", class_="gds-secondary")
 
-        hours_per_week = (df["loginCount"] * SESSION_HOURS_PER_SESSION) / weeks
+        user_hours = (
+            usage.groupby("user_id")["session_length_hours"].sum() / weeks
+        )
+        hours_per_week = user_hours.reindex(user_hours.index, fill_value=0)
         labels, counts, colors = _pie_from_series(
             hours_per_week,
             [
@@ -601,14 +645,15 @@ def server(input, output, session):
     @output
     @render.ui
     def users_logins_pie():
-        df = filtered_users()
+        usage = usage_filtered()
         start, end = current_period()
         days = max((end - start).days + 1, 1)
         weeks = max(days / 7, 1)
-        if df.empty:
+        if usage.empty:
             return ui.tags.div("No data for selected period", class_="gds-secondary")
 
-        logins_per_week = df["loginCount"] / weeks
+        user_logins = usage.groupby("user_id")["logins"].sum() / weeks
+        logins_per_week = user_logins.reindex(user_logins.index, fill_value=0)
         labels, counts, colors = _pie_from_series(
             logins_per_week,
             [
@@ -637,39 +682,41 @@ def server(input, output, session):
     @output
     @render.ui
     def users_trend():
-        df = filtered_timeseries()
-        if df.empty:
+        usage = usage_filtered()
+        if usage.empty:
             fig = px.line(title="No data for selected period")
             return render_plotly(fig)
 
-        df_weekly = (
-            df.set_index("date")
-            .resample("W-MON")
-            .agg({"activeUsers": "mean", "regularUsers": "mean"})
-            .reset_index()
-        )
-        df_weekly["week"] = df_weekly["date"].dt.date
+        usage = usage.assign(week=usage["login_time"].dt.to_period("W-MON").dt.start_time)
 
-        plot_df = df_weekly.melt(
-            id_vars=["week"],
-            value_vars=["regularUsers", "activeUsers"],
-            var_name="metric",
-            value_name="value",
+        first_seen = usage.groupby("user_id")["week"].min().reset_index(name="first_week")
+        weeks = sorted(usage["week"].unique())
+
+        first_seen_counts = (
+            first_seen.groupby("first_week")["user_id"].count().reindex(weeks, fill_value=0)
         )
-        plot_df["metric"] = plot_df["metric"].map(
+        cumulative_total = first_seen_counts.cumsum()
+        active_weekly = (
+            usage.groupby("week")["user_id"].nunique().reindex(weeks, fill_value=0)
+        )
+
+        df_plot = pd.DataFrame(
             {
-                "regularUsers": "Total users",
-                "activeUsers": "Total active users",
+                "week": weeks,
+                "Total users": cumulative_total.values,
+                "Total active users": active_weekly.values,
             }
         )
 
+        df_plot = df_plot.melt(id_vars="week", var_name="metric", value_name="value")
+
         fig = px.line(
-            plot_df,
+            df_plot,
             x="week",
             y="value",
             color="metric",
             markers=True,
-            labels={"week": "Week", "value": "Weekly total", "metric": "Metric"},
+            labels={"week": "Week", "value": "Users", "metric": "Metric"},
         )
         fig.update_layout(legend_title_text="")
         return render_plotly(fig)
@@ -677,28 +724,29 @@ def server(input, output, session):
     @output
     @render.ui
     def users_frequency():
-        df = filtered_timeseries()
-        if df.empty:
+        usage = usage_filtered()
+        if usage.empty:
             fig = px.line(title="No data for selected period")
             return render_plotly(fig)
 
+        usage = usage.assign(week=usage["login_time"].dt.to_period("W-MON").dt.start_time)
         df_weekly = (
-            df.set_index("date")
-            .resample("W-MON")
-            .agg({"sessionHours": "sum"})
+            usage.groupby("week")
+            .agg(
+                total_hours=("session_length_hours", "sum"),
+                total_logins=("logins", "sum"),
+            )
             .reset_index()
         )
-        df_weekly["week"] = df_weekly["date"].dt.date
-        df_weekly["total_logins"] = df_weekly["sessionHours"] / SESSION_HOURS_PER_SESSION
 
         plot_df = df_weekly.melt(
             id_vars=["week"],
-            value_vars=["total_logins", "sessionHours"],
+            value_vars=["total_logins", "total_hours"],
             var_name="metric",
             value_name="value",
         )
         plot_df["metric"] = plot_df["metric"].map(
-            {"total_logins": "Total logins", "sessionHours": "Total hours"}
+            {"total_logins": "Total logins", "total_hours": "Total hours"}
         )
 
         fig = px.line(
@@ -850,17 +898,17 @@ def server(input, output, session):
     @output
     @render.ui
     def tenancy_licence_bars():
-        df = data.tenancies.copy()
-        if df.empty:
+        usage = tenancy_usage()
+        if usage.empty:
             fig = px.bar(title="No data")
             return render_plotly(fig)
-        long = pd.DataFrame(
-            {
-                "Tenancy": pd.concat([df["tenancy"], df["tenancy"]], ignore_index=True),
-                "Component": ["Connect"] * len(df) + ["Workbench"] * len(df),
-                "Users": pd.concat([df["connectUsers"], df["workbenchUsers"]], ignore_index=True),
-            }
+        agg = (
+            usage.groupby(["tenancy", "component"])["user_id"]
+            .nunique()
+            .reset_index()
+            .rename(columns={"user_id": "Users", "tenancy": "Tenancy", "component": "Component"})
         )
+        long = agg
         fig = px.bar(
             long,
             x="Tenancy",
@@ -875,20 +923,17 @@ def server(input, output, session):
     @output
     @render.ui
     def tenancy_active_bars():
-        df = data.tenancies.copy()
-        if df.empty:
+        usage = tenancy_usage()
+        if usage.empty:
             fig = px.bar(title="No data")
             return render_plotly(fig)
-        ratios = df["connectUsers"] / (df["connectUsers"] + df["workbenchUsers"])
-        connect_active = (df["activeUsers"] * ratios).fillna(0)
-        workbench_active = df["activeUsers"] - connect_active
-        long = pd.DataFrame(
-            {
-                "Tenancy": pd.concat([df["tenancy"], df["tenancy"]], ignore_index=True),
-                "Component": ["Connect"] * len(df) + ["Workbench"] * len(df),
-                "Users": pd.concat([connect_active, workbench_active], ignore_index=True),
-            }
+        active = (
+            usage.groupby(["tenancy", "component"])["user_id"]
+            .nunique()
+            .reset_index()
+            .rename(columns={"user_id": "Users", "tenancy": "Tenancy", "component": "Component"})
         )
+        long = active
         fig = px.bar(
             long,
             x="Tenancy",
@@ -903,20 +948,17 @@ def server(input, output, session):
     @output
     @render.ui
     def tenancy_logins_bars():
-        df = data.tenancies.copy()
-        if df.empty:
+        usage = tenancy_usage()
+        if usage.empty:
             fig = px.bar(title="No data")
             return render_plotly(fig)
-        ratios = df["connectUsers"] / (df["connectUsers"] + df["workbenchUsers"])
-        connect_logins = (df["totalLogins"] * ratios).fillna(0)
-        workbench_logins = df["totalLogins"] - connect_logins
-        long = pd.DataFrame(
-            {
-                "Tenancy": pd.concat([df["tenancy"], df["tenancy"]], ignore_index=True),
-                "Component": ["Connect"] * len(df) + ["Workbench"] * len(df),
-                "Logins": pd.concat([connect_logins, workbench_logins], ignore_index=True),
-            }
+        logins = (
+            usage.groupby(["tenancy", "component"])["logins"]
+            .sum()
+            .reset_index()
+            .rename(columns={"logins": "Logins", "tenancy": "Tenancy", "component": "Component"})
         )
+        long = logins
         fig = px.bar(
             long,
             x="Tenancy",
@@ -931,20 +973,17 @@ def server(input, output, session):
     @output
     @render.ui
     def tenancy_hours_bars():
-        df = data.tenancies.copy()
-        if df.empty:
+        usage = tenancy_usage()
+        if usage.empty:
             fig = px.bar(title="No data")
             return render_plotly(fig)
-        ratios = df["connectUsers"] / (df["connectUsers"] + df["workbenchUsers"])
-        connect_hours = (df["totalLogins"] * ratios * SESSION_HOURS_PER_SESSION).fillna(0)
-        workbench_hours = df["totalLogins"] * SESSION_HOURS_PER_SESSION - connect_hours
-        long = pd.DataFrame(
-            {
-                "Tenancy": pd.concat([df["tenancy"], df["tenancy"]], ignore_index=True),
-                "Component": ["Connect"] * len(df) + ["Workbench"] * len(df),
-                "Hours": pd.concat([connect_hours, workbench_hours], ignore_index=True),
-            }
+        hours = (
+            usage.groupby(["tenancy", "component"])["session_length_hours"]
+            .sum()
+            .reset_index()
+            .rename(columns={"session_length_hours": "Hours", "tenancy": "Tenancy", "component": "Component"})
         )
+        long = hours
         fig = px.bar(
             long,
             x="Tenancy",
@@ -1027,27 +1066,13 @@ def server(input, output, session):
     @output
     @render.ui
     def tenancies_table_hours():
-        df, _, _, logs = _tenancy_common()
-        if df.empty or logs is None:
-            empty = pd.DataFrame(columns=["Tenancy", "Connect logins", "Connect hours", "Workbench logins", "Workbench hours"])
-            return ui.HTML(empty.to_html(index=False, classes="full-table", border=0))
-        connect_logins, workbench_logins, connect_hours, workbench_hours = logs
-        table = pd.DataFrame(
-            {
-                "Tenancy": df["tenancy"],
-                "Connect logins": connect_logins.round(0).astype(int),
-                "Connect hours": connect_hours.apply(_fmt_hours),
-                "Workbench logins": workbench_logins.round(0).astype(int),
-                "Workbench hours": workbench_hours.apply(_fmt_hours),
-            }
-        ).sort_values("Tenancy")
-        return ui.HTML(table.to_html(index=False, classes="full-table", border=0))
+        return ui.HTML(pd.DataFrame().to_html(index=False, classes="full-table", border=0))
 
     @output
     @render.ui
     def tenancies_table_all():
-        df, connect_active, workbench_active, logs = _tenancy_common()
-        if df.empty or logs is None:
+        usage = tenancy_usage()
+        if usage.empty:
             empty = pd.DataFrame(
                 columns=[
                     "Tenancy",
@@ -1062,18 +1087,63 @@ def server(input, output, session):
                 ]
             )
             return ui.HTML(empty.to_html(index=False, classes="full-table", border=0))
-        connect_logins, workbench_logins, connect_hours, workbench_hours = logs
+
+        start, end = current_period()
+        active_usage = usage[
+            (usage["login_time"] >= start) & (usage["login_time"] <= end)
+        ]
+        user_counts = (
+            usage.groupby(["tenancy", "component"])["user_id"]
+            .nunique()
+            .unstack(fill_value=0)
+            .rename(columns={"Connect": "Connect total users", "Workbench": "Workbench total users"})
+            .reset_index()
+            .rename(columns={"tenancy": "Tenancy"})
+        )
+        active_counts = (
+            active_usage.groupby(["tenancy", "component"])["user_id"]
+            .nunique()
+            .unstack(fill_value=0)
+            .rename(columns={"Connect": "Connect active users", "Workbench": "Workbench active users"})
+            .reset_index()
+            .rename(columns={"tenancy": "Tenancy"})
+        )
+        logins = (
+            usage.groupby(["tenancy", "component"])["logins"]
+            .sum()
+            .unstack(fill_value=0)
+            .rename(columns={"Connect": "Connect logins", "Workbench": "Workbench logins"})
+            .reset_index()
+            .rename(columns={"tenancy": "Tenancy"})
+        )
+        hours = (
+            usage.groupby(["tenancy", "component"])["session_length_hours"]
+            .sum()
+            .unstack(fill_value=0)
+            .rename(columns={"Connect": "Connect hours", "Workbench": "Workbench hours"})
+            .reset_index()
+            .rename(columns={"tenancy": "Tenancy"})
+        )
+
+        merged = (
+            user_counts
+            .merge(active_counts, on="tenancy", how="outer")
+            .merge(logins, on="tenancy", how="outer")
+            .merge(hours, on="tenancy", how="outer")
+            .fillna(0)
+        )
+
         table = pd.DataFrame(
             {
-                "Tenancy": df["tenancy"],
-                "Connect total users": df["connectUsers"].astype(int),
-                "Connect active users": connect_active.round(0).astype(int),
-                "Connect logins": connect_logins.round(0).astype(int),
-                "Connect hours": connect_hours.apply(_fmt_hours),
-                "Workbench total users": df["workbenchUsers"].astype(int),
-                "Workbench active users": workbench_active.round(0).astype(int),
-                "Workbench logins": workbench_logins.round(0).astype(int),
-                "Workbench hours": workbench_hours.apply(_fmt_hours),
+                "Tenancy": merged["tenancy"],
+                "Connect total users": merged.get("Connect total users", 0).astype(int),
+                "Connect active users": merged.get("Connect active users", 0).astype(int),
+                "Connect logins": merged.get("Connect logins", 0).astype(int),
+                "Connect hours": merged.get("Connect hours", 0).apply(_fmt_hours),
+                "Workbench total users": merged.get("Workbench total users", 0).astype(int),
+                "Workbench active users": merged.get("Workbench active users", 0).astype(int),
+                "Workbench logins": merged.get("Workbench logins", 0).astype(int),
+                "Workbench hours": merged.get("Workbench hours", 0).apply(_fmt_hours),
             }
         ).sort_values("Tenancy")
         return ui.HTML(table.to_html(index=False, classes="full-table", border=0))

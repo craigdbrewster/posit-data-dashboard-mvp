@@ -1,4 +1,5 @@
 from datetime import timedelta
+import os
 
 import pandas as pd
 
@@ -8,37 +9,28 @@ TOTAL_USERS = 10500
 TOTAL_CONNECT_LICENCES = 10000
 TOTAL_WORKBENCH_LICENCES = 5000
 NEW_USERS = 50  # static for MVP
+SESSION_HOURS_PER_SESSION = 1.5
 
+USAGE_LOG_PATH = os.path.join(DATA_DIR, "usage_log.csv")
 
-# Load datasets once for app lifetime
-users = pd.read_csv(f"{DATA_DIR}/users.csv")
-tenancies = pd.read_csv(f"{DATA_DIR}/tenancies.csv")
-licences = pd.read_csv(f"{DATA_DIR}/licences.csv")
-timeseries = pd.read_csv(f"{DATA_DIR}/timeseries.csv")
+# Load unified usage log (expected to exist)
+usage_log = pd.read_csv(USAGE_LOG_PATH, parse_dates=["login_time"])
 
-# Parse dates
-users["lastLogin"] = pd.to_datetime(users["lastLogin"])
-timeseries["date"] = pd.to_datetime(timeseries["date"])
-
-# Convenience: session hours per day based on guide
-timeseries["sessionHours"] = timeseries["activeUsers"] * 8.5
-
-# Defaults for date range
-max_date = timeseries["date"].max()
-min_date = timeseries["date"].min()
+# Defaults for date range based on usage log
+max_date = usage_log["login_time"].max().normalize()
+min_date = usage_log["login_time"].min().normalize()
 default_end = max_date.date()
 default_start = (max_date - timedelta(days=29)).date()
 
 
 def tenancy_choices():
-    all_vals = sorted(users["tenancy"].unique())
+    all_vals = sorted(usage_log["tenancy"].unique())
     return ["All Tenancies"] + all_vals
 
 
 def environment_choices():
-    # Base list from guide, merged with whatever is in the data
     base = ["Production", "Development", "Staging"]
-    data_vals = sorted(users["environment"].unique())
+    data_vals = sorted(usage_log["environment"].unique())
     merged = []
     for val in base + list(data_vals):
         if val not in merged:
@@ -47,7 +39,56 @@ def environment_choices():
 
 
 def component_choices():
-    data_vals = sorted(
-        pd.concat([users["component"], licences["component"]]).unique()
-    )
+    data_vals = sorted(usage_log["component"].unique())
     return ["All Components"] + list(data_vals)
+
+
+# Derived users summary (per user)
+users = (
+    usage_log.groupby(
+        ["user_id", "tenancy", "component", "environment"], as_index=False
+    )
+    .agg(
+        lastLogin=("login_time", "max"),
+        loginCount=("logins", "sum"),
+        totalHours=("session_length_hours", "sum"),
+    )
+    .rename(columns={"user_id": "userId"})
+)
+
+# Derived tenancies summary
+tenancies = (
+    usage_log.groupby(["tenancy", "component"], as_index=False)
+    .agg(
+        activeUsers=("user_id", "nunique"),
+        totalLogins=("logins", "sum"),
+        sessionHours=("session_length_hours", "sum"),
+    )
+)
+tenancies["growth"] = 0.0  # placeholder
+tenancies["workbenchUsers"] = tenancies.apply(
+    lambda r: r["activeUsers"] if r["component"] == "Workbench" else 0, axis=1
+)
+tenancies["connectUsers"] = tenancies.apply(
+    lambda r: r["activeUsers"] if r["component"] == "Connect" else 0, axis=1
+)
+
+# Derived licences (approximate: assigned equals unique users per tenancy/component)
+licences = (
+    usage_log.groupby(["tenancy", "component"])["user_id"]
+    .nunique()
+    .reset_index()
+    .rename(columns={"user_id": "licencesUsed"})
+)
+
+# Derived timeseries (daily)
+timeseries = (
+    usage_log.assign(date=usage_log["login_time"].dt.normalize())
+    .groupby("date", as_index=False)
+    .agg(
+        activeUsers=("user_id", "nunique"),
+        regularUsers=("user_id", "nunique"),
+        powerUsers=("user_id", "nunique"),
+        sessionHours=("session_length_hours", "sum"),
+    )
+)
