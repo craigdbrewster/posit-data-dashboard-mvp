@@ -26,31 +26,6 @@ def panel_card(title, body):
     )
 
 
-def rag_card(title, text, target, actual):
-    """Simple RAG card with target/actual."""
-    try:
-        target_val = float(target)
-        actual_val = float(actual)
-    except Exception:
-        target_val = actual_val = 0.0
-    if actual_val >= target_val:
-        status_class = "rag-good"
-    elif actual_val >= 0.9 * target_val:
-        status_class = "rag-warn"
-    else:
-        status_class = "rag-bad"
-    return ui.tags.div(
-        {"class": f"rag-card {status_class}", "role": "group", "aria-label": title},
-        ui.tags.div({"class": "rag-card__title"}, title),
-        ui.tags.div({"class": "rag-card__text"}, text),
-        ui.tags.div(
-            {"class": "rag-card__metrics"},
-            ui.tags.span({"class": "rag-card__label"}, f"Target: {target}"),
-            ui.tags.span({"class": "rag-card__label"}, f"Actual: {actual}"),
-        ),
-    )
-
-
 app_ui = ui.page_fluid(
     ui.tags.head(
         ui.tags.title("Posit Platform Analytics"),
@@ -319,49 +294,16 @@ app_ui = ui.page_fluid(
                 color: var(--gds-muted);
                 font-weight: 600;
             }
-            .rag-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-                gap: 12px;
-                margin: 12px 0 8px;
+            /* Force DataTables to fill wrappers */
+            .gds-table-wrapper .dataTables_wrapper,
+            .gds-table-wrapper .dataTables_scroll,
+            .gds-table-wrapper .dataTables_scrollHead,
+            .gds-table-wrapper .dataTables_scrollBody,
+            .gds-table-wrapper table.dataTable {
+                width: 100% !important;
             }
-            .rag-card {
-                border-radius: 8px;
-                padding: 12px 14px;
-                border: 1px solid #b1b4b6;
-            }
-            .rag-card__title {
-                font-weight: 700;
-                margin: 0 0 6px;
-                font-size: 18px;
-            }
-            .rag-card__text {
-                color: var(--gds-muted);
-                margin: 0 0 6px;
-            }
-            .rag-card__metrics {
-                display: flex;
-                flex-direction: column;
-                gap: 2px;
-                font-weight: 600;
-            }
-            .rag-card__label {
-                display: block;
-            }
-            .rag-good {
-                background: #dff0d8;
-                border-color: #6ab46f;
-                color: #0b0c0c;
-            }
-            .rag-warn {
-                background: #fff2cc;
-                border-color: #ffbf47;
-                color: #0b0c0c;
-            }
-            .rag-bad {
-                background: #f3dcdc;
-                border-color: #d4351c;
-                color: #0b0c0c;
+            .gds-table-wrapper table.dataTable {
+                margin: 0 !important;
             }
             .users-top-row {
                 display: grid;
@@ -404,143 +346,281 @@ app_ui = ui.page_fluid(
                 font-weight: 700;
                 text-align: left;
             }
+            .hero-bar {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 16px;
+            }
+            .shared-tab-panel {
+                border: 1px solid var(--gds-border);
+                background: var(--gds-surface);
+                padding: 18px;
+                border-radius: 0 0 8px 8px;
+                margin-top: -1px;
+                box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            .licence-filter-row {
+                display: grid;
+                grid-template-columns: minmax(220px, 260px) 1fr;
+                gap: 12px;
+                align-items: stretch;
+            }
+            .licence-filter-row > * {
+                height: 100%;
+            }
+            .licence-card {
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            }
+            .filter-card {
+                height: 100%;
+                border: 1px solid var(--gds-border);
+                border-radius: 8px;
+                background: var(--gds-surface);
+                padding: 12px 14px;
+                display: flex;
+                align-items: center;
+            }
+            .filter-card .gds-filter-bar {
+                border: none;
+                padding: 0;
+                margin: 0;
+                width: 100%;
+                align-content: center;
+            }
+            .download-bar {
+                display: flex;
+                align-items: flex-end;
+                gap: 10px;
+                justify-content: space-between;
+            }
+            .download-bar .form-group {
+                flex: 1;
+                margin-bottom: 0;
+            }
+            .beta-banner {
+                background: #ffd24d;
+                border: 1px solid #e0b500;
+                border-radius: 8px;
+                padding: 12px 14px;
+                margin-bottom: 12px;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .beta-banner__title {
+                font-weight: 700;
+                margin: 0;
+            }
+            .beta-banner__text {
+                margin: 0;
+                color: var(--gds-muted);
+            }
+            .beta-banner__action {
+                margin-left: auto;
+            }
+            /* Keep Plotly charts contained within panels */
+            .gds-panel .plotly-graph-div {
+                width: 100% !important;
+                max-width: 100%;
+                overflow: hidden;
+            }
+            .gds-panel .plot-container {
+                width: 100% !important;
+                max-width: 100%;
+                overflow: hidden;
+            }
+            .gds-panel {
+                overflow: hidden;
+            }
+            .gds-tabs .tab-content {
+                display: block;
+                padding: 0;
+                border: none;
+                min-height: 0;
+            }
             """
         ),
     ),
     ui.tags.main(
         {"class": "govuk-width-container zenith-app", "role": "main"},
-        ui.tags.header(
-            {"class": "zenith-hero"},
-            ui.tags.h1("Posit Platform Analytics", class_="govuk-heading-l"),
-            ui.tags.p(
-                "Track usage, licences, and tenancy engagement.",
-                class_="gds-secondary",
+        ui.tags.div(
+            {"class": "beta-banner", "role": "status", "aria-label": "Beta notice"},
+            ui.tags.div(
+                ui.tags.p("Beta", class_="beta-banner__title"),
+                ui.tags.p(
+                    "This is a beta version of the data dashboard. Please let us know if you have any comments or suggestions",
+                    class_="beta-banner__text",
+                ),
+            ),
+            ui.tags.a(
+                "Feedback",
+                href="#",
+                class_="btn btn-primary beta-banner__action",
+                role="button",
             ),
         ),
         ui.tags.div(
-            {"class": "rag-grid", "style": "margin-bottom:12px;"},
-            rag_card("Uptake", "Avg new users per week", target=10, actual=12),
-            rag_card("Frequency", "Avg sessions per user per week", target=4, actual=2),
-            rag_card("Engagement", "Avg hours per user per week", target=10, actual=20),
-        ),
-        ui.tags.div(
-            {"class": "gds-filter-bar"},
-            ui.input_date_range(
-                "dates",
-                "Date range",
-                start=data.default_start,
-                end=data.default_end,
-                min=data.min_date.date(),
-                max=data.max_date.date(),
-                width="100%",
-            ),
-            ui.input_select(
-                "tenancy",
-                "Tenancy",
-                choices=data.tenancy_choices(),
-                selected="All Tenancies",
-                width="100%",
-            ),
-            ui.input_select(
-                "environment",
-                "Environment",
-                choices=data.environment_choices(),
-                selected="All Environments",
-                width="100%",
-            ),
-            ui.input_select(
-                "component",
-                "Component",
-                choices=data.component_choices(),
-                selected="All Components",
-                width="100%",
+            {"class": "hero-bar"},
+            ui.tags.header(
+                {"class": "zenith-hero"},
+                ui.tags.h1("Posit Usage Data Dashboard", class_="govuk-heading-l"),
+                ui.tags.p(
+                    "Enabling more people to use Posit, Python and R more often.",
+                    class_="gds-secondary",
+                ),
             ),
         ),
         ui.tags.div(
             {"class": "gds-tabs"},
             ui.navset_tab(
-                # -------------------- Users --------------------
                 ui.nav_panel(
-                    "Users",
+                    "Connect",
+                    value="connect",
+                ),
+                ui.nav_panel(
+                    "Workbench",
+                    value="workbench",
+                ),
+                ui.nav_panel(
+                    "Tenancies",
+                    ui.tags.div(),  # content rendered via panel_conditional below
+                    value="tenancies",
+                ),
+                id="main_tabs",
+            ),
+            ui.panel_conditional(
+                "input.main_tabs == 'connect' || input.main_tabs == 'workbench'",
                     ui.tags.div(
-                        {"class": "users-top-row"},
+                        {"class": "shared-tab-panel"},
+                    ui.tags.div(
+                        {"class": "licence-filter-row"},
                         ui.tags.div(
-                            {"class": "users-metric-stack"},
-                            metric_card(
-                                "Total users",
-                                ui.output_text("users_total"),
-                                ui.output_text("overview_total_users_change"),
-                            ),
-                            metric_card(
-                                "New users",
-                                ui.output_text("overview_new_users"),
-                                ui.output_text("overview_new_users_change"),
-                            ),
-                            metric_card(
-                                "Active users",
-                                ui.output_text("users_active"),
-                                ui.output_text("users_active_change"),
-                            ),
+                            {"class": "gds-card licence-card"},
+                            ui.tags.div({"class": "gds-card__label"}, "Licences available"),
+                            ui.tags.div({"class": "gds-card__value"}, ui.output_text("licences_available")),
                         ),
                         ui.tags.div(
-                            {"class": "gds-panel usage-frequency-panel"},
-                            ui.tags.div({"class": "gds-panel__title govuk-heading-m"}, "Frequency"),
-                            ui.tags.div({"class": "usage-frequency-list"}, ui.output_ui("users_distribution")),
+                            {"class": "filter-card"},
+                            ui.tags.div(
+                                {"class": "gds-filter-bar"},
+                                ui.input_date_range(
+                                    "dates",
+                                    "Date range",
+                                    start=data.default_start,
+                                    end=data.default_end,
+                                    min=data.min_date.date(),
+                                    max=data.max_date.date(),
+                                    width="100%",
+                                ),
+                                ui.input_select(
+                                    "tenancy",
+                                    "Tenancy",
+                                    choices=data.tenancy_choices(),
+                                    selected="All Tenancies",
+                                    width="100%",
+                                ),
+                                ui.input_select(
+                                    "environment",
+                                    "Environment",
+                                    choices=data.environment_choices(),
+                                    selected="All Environments",
+                                    width="100%",
+                                ),
+                            ),
                         ),
                     ),
                     ui.tags.div(
-                        {"class": "gds-panel", "style": "margin-top:8px;"},
-                        ui.tags.div({"class": "gds-panel__title govuk-heading-m"}, "Engagement"),
-                        ui.output_ui("users_engagement_trend"),
+                        {"class": "gds-card-grid", "style": "margin-top:10px;"},
+                        metric_card(
+                            "Total users",
+                            ui.output_text("users_total"),
+                            ui.output_text("overview_total_users_change"),
+                        ),
+                        metric_card(
+                            "New users",
+                            ui.output_text("overview_new_users"),
+                            ui.output_text("overview_new_users_change"),
+                        ),
+                        metric_card(
+                            "Active users",
+                            ui.output_text("users_active"),
+                            ui.output_text("users_active_change"),
+                        ),
                     ),
                     ui.tags.div(
-                        {"class": "gds-filter-bar", "style": "margin-top:14px"},
-                        ui.input_text("pid_search", "Search by PID", placeholder="Enter user ID"),
+                        {"class": "gds-panel-grid", "style": "margin-top:10px;"},
+                        panel_card("Avg logins per week", ui.output_ui("users_logins_pie")),
+                        panel_card("Avg hours per week", ui.output_ui("users_hours_pie")),
+                    ),
+                    ui.tags.div(
+                        {"class": "gds-panel-grid", "style": "margin-top:10px"},
+                        panel_card("Total and active users per week", ui.output_ui("users_trend")),
+                    ),
+                    ui.tags.div(
+                        {"class": "gds-panel-grid", "style": "margin-top:10px"},
+                        panel_card("Total logins and hours per week ", ui.output_ui("users_frequency")),
                     ),
                     ui.tags.div(
                         {"class": "gds-table-wrapper"},
+                        ui.tags.div(
+                            {"class": "download-bar", "style": "margin:0 0 8px 0;"},
+                            ui.input_text("pid_search", "Search by PID", placeholder="Enter a PID"),
+                            ui.download_button("download_users", "Download CSV", class_="btn btn-primary"),
+                        ),
                         ui.output_ui("users_table"),
                     ),
                 ),
-                # -------------------- Licences --------------------
-                ui.nav_panel(
-                    "Licences",
+            ),
+            ui.panel_conditional(
+                "input.main_tabs == 'tenancies'",
+                ui.tags.div(
+                    {"class": "shared-tab-panel"},
                     ui.tags.div(
-                        {"class": "gds-card-grid"},
-                        metric_card(
-                            "Assigned Connect licences",
-                            ui.output_text("lic_connect_assigned"),
-                        ),
-                        metric_card(
-                            "Active Connect licences",
-                            ui.output_text("lic_connect_active"),
-                            ui.output_text("lic_connect_active_change"),
-                        ),
-                        metric_card(
-                            "Assigned Workbench licences",
-                            ui.output_text("lic_workbench_assigned"),
-                        ),
-                        metric_card(
-                            "Active Workbench licences",
-                            ui.output_text("lic_workbench_active"),
-                            ui.output_text("lic_workbench_active_change"),
+                        {"class": "filter-card"},
+                        ui.tags.div(
+                            {"class": "gds-filter-bar"},
+                            ui.input_date_range(
+                                "tenancy_dates",
+                                "Date range",
+                                start=data.default_start,
+                                end=data.default_end,
+                                min=data.min_date.date(),
+                                max=data.max_date.date(),
+                                width="100%",
+                            ),
+                            ui.input_select(
+                                "tenancy_environment",
+                                "Environment",
+                                choices=data.environment_choices(),
+                                selected="All Environments",
+                                width="100%",
+                            ),
                         ),
                     ),
-                    ui.tags.div({"class": "gds-table-wrapper"}, ui.output_ui("lic_table")),
-                ),
-                # -------------------- Tenancies --------------------
-                ui.nav_panel(
-                    "Tenancies",
                     ui.tags.div(
                         {"class": "gds-panel-grid", "style": "margin-bottom:12px"},
-                        panel_card(
-                            "Active users & session hours by tenancy",
-                            ui.output_ui("overview_tenancy_bars"),
-                        ),
+                        panel_card("Total users", ui.output_ui("tenancy_licence_bars")),
+                        panel_card("Active users", ui.output_ui("tenancy_active_bars")),
                     ),
                     ui.tags.div(
-                        {"class": "gds-table-wrapper"},
-                        ui.output_ui("tenancies_table"),
+                        {"class": "gds-panel-grid", "style": "margin-bottom:12px"},
+                        panel_card("Total logins", ui.output_ui("tenancy_logins_bars")),
+                        panel_card("Total hours", ui.output_ui("tenancy_hours_bars")),
+                    ),
+                    ui.tags.div(
+                        {"class": "gds-table-wrapper", "style": "margin-top:10px;"},
+                        ui.tags.div(
+                            {"style": "text-align:right; margin-bottom:6px;"},
+                            ui.download_button("download_tenancies", "Download CSV", class_="btn btn-primary"),
+                        ),
+                        ui.output_ui("tenancies_table_all"),
                     ),
                 ),
             ),
