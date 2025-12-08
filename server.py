@@ -80,47 +80,44 @@ def server(input, output, session):
         comp_start = start - timedelta(days=day_diff + 1)
         return comp_start, comp_end
 
+    def _aggregate_users(usage: pd.DataFrame) -> pd.DataFrame:
+        """Aggregate usage to one row per user with latest tenancy/component/env and summed logins."""
+        if usage.empty:
+            return pd.DataFrame(
+                columns=[
+                    "userId",
+                    "tenancy",
+                    "component",
+                    "environment",
+                    "lastLogin",
+                    "loginCount",
+                ]
+            )
+        # Sum logins per user in the window
+        sums = usage.groupby("user_id", as_index=False)["logins"].sum().rename(columns={"user_id": "userId", "logins": "loginCount"})
+        # Latest login per user with associated tenancy/component/env
+        latest = (
+            usage.sort_values("login_time")
+            .groupby("user_id", as_index=False)
+            .tail(1)
+            .rename(columns={"user_id": "userId", "login_time": "lastLogin"})
+        )
+        merged = latest[["userId", "tenancy", "component", "environment", "lastLogin"]].merge(
+            sums, on="userId", how="left"
+        )
+        return merged
+
     @reactive.Calc
     def filtered_users():
-        tenancy_val = input.tenancy()
-        env_val = input.environment()
-        comp_val = user_component()
-        start, end = current_period()
-
-        df = data.users.copy()
-
-        if tenancy_val != "All Tenancies":
-            df = df[df["tenancy"] == tenancy_val]
-
-        if env_val != "All Environments":
-            df = df[df["environment"] == env_val]
-
-        if comp_val and comp_val != "All Components":
-            df = df[df["component"] == comp_val]
-
-        df = df[(df["lastLogin"] >= start) & (df["lastLogin"] <= end)]
-        return df
+        usage = usage_filtered()
+        return _aggregate_users(usage)
 
     @reactive.Calc
     def filtered_users_prev_period():
-        tenancy_val = input.tenancy()
-        env_val = input.environment()
-        comp_val = user_component()
         start, end = comparison_period()
-
-        df = data.users.copy()
-
-        if tenancy_val != "All Tenancies":
-            df = df[df["tenancy"] == tenancy_val]
-
-        if env_val != "All Environments":
-            df = df[df["environment"] == env_val]
-
-        if comp_val and comp_val != "All Components":
-            df = df[df["component"] == comp_val]
-
-        df = df[(df["lastLogin"] >= start) & (df["lastLogin"] <= end)]
-        return df
+        usage = usage_base()
+        usage = usage[(usage["login_time"] >= start) & (usage["login_time"] <= end)]
+        return _aggregate_users(usage)
 
     @reactive.Calc
     def filtered_timeseries():
@@ -144,11 +141,9 @@ def server(input, output, session):
         )
         return df
 
-    def usage_filtered():
-        start, end = current_period()
-        usage = data.usage_log[
-            (data.usage_log["login_time"] >= start) & (data.usage_log["login_time"] <= end)
-        ].copy()
+    def usage_base():
+        """Apply tenancy/env/component filters, without date restriction."""
+        usage = data.usage_log.copy()
         tenancy_val = input.tenancy()
         env_val = input.environment()
         comp_val = user_component()
@@ -159,6 +154,45 @@ def server(input, output, session):
         if comp_val and comp_val != "All Components":
             usage = usage[usage["component"] == comp_val]
         return usage
+
+    def usage_filtered():
+        start, end = current_period()
+        usage = usage_base()
+        usage = usage[
+            (usage["login_time"] >= start) & (usage["login_time"] <= end)
+        ].copy()
+        return usage
+
+    def usage_cumulative(end_date):
+        """Return usage filtered by tenancy/env/component up to end_date (cumulative)."""
+        usage = usage_base()
+        usage = usage[usage["login_time"] <= end_date].copy()
+        return usage
+
+    @reactive.Calc
+    def usage_window():
+        return usage_filtered()
+
+    @reactive.Calc
+    def total_users_cumulative():
+        """Cumulative unique users up to the end of the current period (respecting filters)."""
+        _, end = current_period()
+        usage = usage_cumulative(end)
+        return usage["user_id"].nunique()
+
+    @reactive.Calc
+    def active_users_current():
+        """Unique users with activity in the current period (respecting filters)."""
+        usage = usage_window()
+        active = usage["user_id"].nunique()
+        return min(active, total_users_cumulative() if total_users_cumulative() else active)
+
+    def first_seen_series():
+        """First login per user for current tenancy/env/component filters."""
+        usage = usage_base()
+        if usage.empty:
+            return pd.Series(dtype="datetime64[ns]")
+        return usage.groupby("user_id")["login_time"].min()
 
     @reactive.Calc
     def tenancy_usage():
@@ -182,47 +216,16 @@ def server(input, output, session):
 
     @reactive.Calc
     def new_users_current():
-        """Count of users first seen in current period."""
-        tenancy_val = input.tenancy()
-        env_val = input.environment()
-        comp_val = user_component()
         start, end = current_period()
-
-        df = data.users.copy()
-        if tenancy_val != "All Tenancies":
-            df = df[df["tenancy"] == tenancy_val]
-        if env_val != "All Environments":
-            df = df[df["environment"] == env_val]
-        if comp_val != "All Components":
-            df = df[df["component"] == comp_val]
-
-        # New users: those who appear in current period but not in any earlier data
-        comp_start, _ = comparison_period()
-        before_period = df[df["lastLogin"] < comp_start]
-        in_current = df[(df["lastLogin"] >= start) & (df["lastLogin"] <= end)]
-        new_ids = set(in_current["userId"]) - set(before_period["userId"])
+        first_seen = first_seen_series()
+        new_ids = first_seen[(first_seen >= start) & (first_seen <= end)].index
         return len(new_ids)
 
     @reactive.Calc
     def new_users_previous():
-        """Count of new users in previous period for comparison."""
-        tenancy_val = input.tenancy()
-        env_val = input.environment()
-        comp_val = user_component()
         comp_start, comp_end = comparison_period()
-
-        df = data.users.copy()
-        if tenancy_val != "All Tenancies":
-            df = df[df["tenancy"] == tenancy_val]
-        if env_val != "All Environments":
-            df = df[df["environment"] == env_val]
-        if comp_val != "All Components":
-            df = df[df["component"] == comp_val]
-
-        before_comp = comp_start - timedelta(days=1)
-        before_period = df[df["lastLogin"] < before_comp]
-        in_prev = df[(df["lastLogin"] >= comp_start) & (df["lastLogin"] <= comp_end)]
-        new_ids = set(in_prev["userId"]) - set(before_period["userId"])
+        first_seen = first_seen_series()
+        new_ids = first_seen[(first_seen >= comp_start) & (first_seen <= comp_end)].index
         return len(new_ids)
 
     @reactive.Calc
@@ -332,14 +335,19 @@ def server(input, output, session):
     @output
     @render.text
     def overview_active_users():
-        return f"{len(filtered_users()):,}"
+        return f"{active_users_current():,}"
 
     @output
     @render.text
     def overview_total_users_change():
-        current = 10000
-        prev = max(current - 47, 0)
-        change = (current - prev) / prev * 100 if prev else 0.0
+        _, end = current_period()
+        _, comp_end = comparison_period()
+        current = usage_cumulative(end)["user_id"].nunique()
+        prev = usage_cumulative(comp_end)["user_id"].nunique()
+        if prev > 0:
+            change = (current - prev) / prev * 100
+        else:
+            change = 0.0
         arrow = "▲" if change >= 0 else "▼"
         return f"{arrow} {change:.1f}% vs previous period"
 
@@ -350,7 +358,7 @@ def server(input, output, session):
     @output
     @render.text
     def overview_active_users_change():
-        current = len(filtered_users())
+        current = active_users_current()
         prev = len(filtered_users_prev_period())
         if prev > 0:
             change = (current - prev) / prev * 100
@@ -481,22 +489,21 @@ def server(input, output, session):
     @output
     @render.text
     def users_total():
-        df = filtered_users()
-        return f"{len(df):,}"
+        _, end = current_period()
+        return f"{total_users_cumulative():,}"
 
     @output
     @render.text
     def users_active():
-        active_count = len(filtered_users())
-        return f"{active_count:,}"
+        return f"{active_users_current():,}"
 
     @output
     @render.text
     def users_active_change():
-        cur_active = len(filtered_users())
+        cur_active = active_users_current()
         prev_active = len(filtered_users_prev_period())
         if prev_active == 0:
-            return ""
+            return "▲ 0.0% vs previous period"
         change = (cur_active - prev_active) / prev_active * 100
         arrow = "▲" if change >= 0 else "▼"
         return f"{arrow} {change:.1f}% vs previous period"
@@ -688,22 +695,27 @@ def server(input, output, session):
             return render_plotly(fig)
 
         usage = usage.assign(week=usage["login_time"].dt.to_period("W-MON").dt.start_time)
-
-        first_seen = usage.groupby("user_id")["week"].min().reset_index(name="first_week")
         weeks = sorted(usage["week"].unique())
 
-        first_seen_counts = (
-            first_seen.groupby("first_week")["user_id"].count().reindex(weeks, fill_value=0)
-        )
-        cumulative_total = first_seen_counts.cumsum()
+        # Active users per week within the selected window
         active_weekly = (
             usage.groupby("week")["user_id"].nunique().reindex(weeks, fill_value=0)
         )
 
+        # Cumulative total users up to each week using all history for the filters
+        base_raw = usage_base()
+        base = base_raw.assign(week=base_raw["login_time"].dt.to_period("W-MON").dt.start_time)
+        cumulative_totals = []
+        for wk in weeks:
+            cutoff = wk + pd.Timedelta(days=6)
+            cumulative_totals.append(
+                base[base["login_time"] <= cutoff]["user_id"].nunique()
+            )
+
         df_plot = pd.DataFrame(
             {
                 "week": weeks,
-                "Total users": cumulative_total.values,
+                "Total users": cumulative_totals,
                 "Total active users": active_weekly.values,
             }
         )
