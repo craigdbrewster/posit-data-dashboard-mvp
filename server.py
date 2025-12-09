@@ -1139,15 +1139,15 @@ def server(input, output, session):
 
         merged = (
             user_counts
-            .merge(active_counts, on="tenancy", how="outer")
-            .merge(logins, on="tenancy", how="outer")
-            .merge(hours, on="tenancy", how="outer")
+            .merge(active_counts, on="Tenancy", how="outer")
+            .merge(logins, on="Tenancy", how="outer")
+            .merge(hours, on="Tenancy", how="outer")
             .fillna(0)
         )
 
         table = pd.DataFrame(
             {
-                "Tenancy": merged["tenancy"],
+                "Tenancy": merged["Tenancy"],
                 "Connect total users": merged.get("Connect total users", 0).astype(int),
                 "Connect active users": merged.get("Connect active users", 0).astype(int),
                 "Connect logins": merged.get("Connect logins", 0).astype(int),
