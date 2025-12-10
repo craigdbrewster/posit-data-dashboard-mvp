@@ -45,6 +45,39 @@ app_ui = ui.page_fluid(
             });
             """
         ),
+        ui.tags.script(
+            """
+            function makeSortable(table) {
+                if (table.dataset.sortableAttached === "true") return;
+                const getCellValue = (row, idx) => {
+                    const txt = row.children[idx].innerText.trim();
+                    const num = parseFloat(txt.replace(/,/g, ''));
+                    return isNaN(num) ? txt.toLowerCase() : num;
+                };
+                const comparer = (idx, asc) => (a, b) => {
+                    const v1 = getCellValue(asc ? a : b, idx);
+                    const v2 = getCellValue(asc ? b : a, idx);
+                    if (v1 === v2) return 0;
+                    return v1 > v2 ? 1 : -1;
+                };
+                table.querySelectorAll('th').forEach((th, idx) => {
+                    th.style.cursor = 'pointer';
+                    th.addEventListener('click', () => {
+                        const tbody = table.tBodies[0];
+                        Array.from(tbody.querySelectorAll('tr'))
+                            .sort(comparer(idx, (th.asc = !th.asc)))
+                            .forEach(tr => tbody.appendChild(tr));
+                    });
+                });
+                table.dataset.sortableAttached = "true";
+            }
+            function attachSortables() {
+                document.querySelectorAll('table.sortable').forEach(makeSortable);
+            }
+            document.addEventListener('DOMContentLoaded', attachSortables);
+            document.addEventListener('shiny:domupdate', attachSortables);
+            """
+        ),
         ui.tags.style(
             """
             :root {

@@ -80,7 +80,7 @@ def server(input, output, session):
         return comp_start, comp_end
 
     def _aggregate_users(usage: pd.DataFrame) -> pd.DataFrame:
-        """Aggregate usage to one row per user with latest tenancy/component/env and summed logins."""
+        """Aggregate usage to one row per user with first/last login and summed logins."""
         if usage.empty:
             return pd.DataFrame(
                 columns=[
@@ -88,12 +88,24 @@ def server(input, output, session):
                     "tenancy",
                     "component",
                     "environment",
+                    "firstLogin",
                     "lastLogin",
                     "loginCount",
                 ]
             )
         # Sum logins per user in the window
-        sums = usage.groupby("user_id", as_index=False)["logins"].sum().rename(columns={"user_id": "userId", "logins": "loginCount"})
+        sums = (
+            usage.groupby("user_id", as_index=False)["logins"]
+            .sum()
+            .rename(columns={"user_id": "userId", "logins": "loginCount"})
+        )
+        # First login per user
+        first = (
+            usage.sort_values("login_time")
+            .groupby("user_id", as_index=False)
+            .head(1)
+            .rename(columns={"user_id": "userId", "login_time": "firstLogin"})
+        )
         # Latest login per user with associated tenancy/component/env
         latest = (
             usage.sort_values("login_time")
@@ -101,8 +113,10 @@ def server(input, output, session):
             .tail(1)
             .rename(columns={"user_id": "userId", "login_time": "lastLogin"})
         )
-        merged = latest[["userId", "tenancy", "component", "environment", "lastLogin"]].merge(
-            sums, on="userId", how="left"
+        merged = (
+            latest[["userId", "tenancy", "component", "environment", "lastLogin"]]
+            .merge(sums, on="userId", how="left")
+            .merge(first[["userId", "firstLogin"]], on="userId", how="left")
         )
         return merged
 
@@ -737,7 +751,7 @@ def server(input, output, session):
             usage_all.groupby("user_id")["logins"].sum() if not usage_all.empty else pd.Series(dtype="float")
         )
 
-        def fmt_last_login(series: pd.Series) -> pd.Series:
+        def fmt_date(series: pd.Series) -> pd.Series:
             """Return series of date-only strings from datetime-like values."""
             formatted = pd.to_datetime(series, errors="coerce").dt.date.astype(str)
             return formatted.replace("NaT", "")
@@ -747,6 +761,7 @@ def server(input, output, session):
                 "PID",
                 "Tenancy",
                 "Environment",
+                "First login",
                 "Last login",
                 "Total logins\n(date range)",
                 "Total logins\n(to date)",
@@ -755,34 +770,37 @@ def server(input, output, session):
             empty_df = pd.DataFrame(
                 columns=cols
             )
-            return ui.HTML(empty_df.to_html(index=False, classes="full-table", border=0))
+            return ui.HTML(empty_df.to_html(index=False, classes="full-table sortable", border=0))
 
         df = df.sort_values("lastLogin", ascending=False)
-        base_cols = ["userId", "tenancy", "environment", "lastLogin", "loginCount"]
+        base_cols = ["userId", "tenancy", "environment", "firstLogin", "lastLogin", "loginCount"]
         out = df[base_cols].copy()
         out = out.rename(
             columns={
                 "userId": "PID",
                 "tenancy": "Tenancy",
                 "environment": "Environment",
+                "firstLogin": "First login",
                 "lastLogin": "Last login",
                 "loginCount": "Total logins\n(date range)",
             }
         )
         out["Total logins\n(to date)"] = out["PID"].map(total_logins_map).fillna(0).astype(int)
-        out["Last login"] = fmt_last_login(out["Last login"])
+        out["First login"] = fmt_date(out["First login"])
+        out["Last login"] = fmt_date(out["Last login"])
         out["Avg logins\n(per week)"] = (out["Total logins\n(date range)"] / weeks).round(1)
         final_cols = [
             "PID",
             "Tenancy",
             "Environment",
+            "First login",
             "Last login",
             "Total logins\n(date range)",
             "Total logins\n(to date)",
             "Avg logins\n(per week)",
         ]
         out = out[final_cols]
-        return ui.HTML(out.to_html(index=False, classes="full-table", border=0))
+        return ui.HTML(out.to_html(index=False, classes="full-table sortable", border=0))
 
     @output
     @render.download(filename="users.csv")
@@ -797,6 +815,7 @@ def server(input, output, session):
                 "PID",
                 "Tenancy",
                 "Environment",
+                "First login",
                 "Last login",
                 "Total logins\n(date range)",
                 "Total logins\n(to date)",
@@ -808,28 +827,31 @@ def server(input, output, session):
             days = max((end - start).days + 1, 1)
             weeks = max(days / 7, 1)
 
-            def fmt_last_login(series: pd.Series) -> pd.Series:
+            def fmt_date(series: pd.Series) -> pd.Series:
                 formatted = pd.to_datetime(series, errors="coerce").dt.date.astype(str)
                 return formatted.replace("NaT", "")
 
             df = df.sort_values("lastLogin", ascending=False)
-            base_cols = ["userId", "tenancy", "environment", "lastLogin", "loginCount"]
+            base_cols = ["userId", "tenancy", "environment", "firstLogin", "lastLogin", "loginCount"]
             df = df[base_cols].copy()
             rename_map = {
                 "userId": "PID",
                 "tenancy": "Tenancy",
                 "environment": "Environment",
+                "firstLogin": "First login",
                 "lastLogin": "Last login",
                 "loginCount": "Total logins\n(date range)",
             }
             df = df.rename(columns=rename_map)
             df["Total logins\n(to date)"] = df["PID"].map(total_logins_map).fillna(0).astype(int)
-            df["Last login"] = fmt_last_login(df["Last login"])
+            df["First login"] = fmt_date(df["First login"])
+            df["Last login"] = fmt_date(df["Last login"])
             df["Avg logins\n(per week)"] = (df["Total logins\n(date range)"] / weeks).round(1)
             final_cols = [
                 "PID",
                 "Tenancy",
                 "Environment",
+                "First login",
                 "Last login",
                 "Total logins\n(date range)",
                 "Total logins\n(to date)",
@@ -980,13 +1002,13 @@ def server(input, output, session):
     @render.ui
     def tenancies_table_connect():
         df = _tenancy_component_table("Connect")
-        return ui.HTML(df.to_html(index=False, classes="full-table", border=0))
+        return ui.HTML(df.to_html(index=False, classes="full-table sortable", border=0))
 
     @output
     @render.ui
     def tenancies_table_workbench():
         df = _tenancy_component_table("Workbench")
-        return ui.HTML(df.to_html(index=False, classes="full-table", border=0))
+        return ui.HTML(df.to_html(index=False, classes="full-table sortable", border=0))
 
     @output
     @render.download(filename="tenancies.csv")
