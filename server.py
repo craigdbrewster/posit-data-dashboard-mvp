@@ -174,16 +174,21 @@ def server(input, output, session):
         ].copy()
         return usage
 
-    def usage_cumulative(end_date):
-        """Return usage filtered by tenancy/env/component up to end_date (cumulative)."""
+    @reactive.Calc
+    def user_scope_cumulative_current():
+        """Unique users up to end of current period (respecting filters)."""
+        _, end = current_period()
         usage = usage_base()
-        usage = usage[usage["login_time"] <= end_date].copy()
-        return usage
+        usage = usage[usage["login_time"] <= end]
+        return set(usage["user_id"].unique())
 
     @reactive.Calc
-    def user_scope_all():
-        """Unique users in the filtered universe (ignores date range)."""
-        return set(usage_base()["user_id"].unique())
+    def user_scope_cumulative_previous():
+        """Unique users up to end of comparison period (respecting filters)."""
+        _, comp_end = comparison_period()
+        usage = usage_base()
+        usage = usage[usage["login_time"] <= comp_end]
+        return set(usage["user_id"].unique())
 
     @reactive.Calc
     def user_scope_current():
@@ -201,10 +206,9 @@ def server(input, output, session):
     @reactive.Calc
     def total_users_cumulative():
         """
-        Total unique users from the (filtered) usage log, ignoring date range.
-        This matches the total user list used for inactive counts.
+        Total unique users up to the end of the current period (respecting filters).
         """
-        return len(user_scope_all())
+        return len(user_scope_cumulative_current())
 
     @reactive.Calc
     def active_users_current():
@@ -275,7 +279,8 @@ def server(input, output, session):
     @reactive.Calc
     def not_logged_in_current():
         """Users from the filtered population with no logins in the current period."""
-        return max(len(user_scope_all() - user_scope_current()), 0)
+        total_scope = user_scope_cumulative_current()
+        return max(len(total_scope - user_scope_current()), 0)
 
     @reactive.Calc
     def sessions_per_user_current():
@@ -314,10 +319,8 @@ def server(input, output, session):
     @output
     @render.text
     def overview_total_users_change():
-        _, end = current_period()
-        _, comp_end = comparison_period()
-        current = usage_cumulative(end)["user_id"].nunique()
-        prev = usage_cumulative(comp_end)["user_id"].nunique()
+        current = len(user_scope_cumulative_current())
+        prev = len(user_scope_cumulative_previous())
         if prev > 0:
             change = (current - prev) / prev * 100
         else:
@@ -490,10 +493,11 @@ def server(input, output, session):
     @render.text
     def users_inactive_change():
         # Compare inactive users between current and previous date windows
-        total_scope = len(user_scope_all())
+        total_scope_current = len(user_scope_cumulative_current())
+        total_scope_prev = len(user_scope_cumulative_previous())
         prev_active = len(user_scope_previous())
-        prev_inactive = max(total_scope - prev_active, 0)
-        current = max(total_scope - len(user_scope_current()), 0)
+        prev_inactive = max(total_scope_prev - prev_active, 0)
+        current = max(total_scope_current - len(user_scope_current()), 0)
         if prev_inactive == 0:
             change = 0.0 if current == 0 else 100.0
         else:
