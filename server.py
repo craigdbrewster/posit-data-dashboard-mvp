@@ -37,7 +37,6 @@ def server(input, output, session):
     TARGET_PENETRATION = 0.6  # 60% target
     TARGET_STICKINESS = 0.6
     TARGET_DEPTH_HOURS = 5.0
-    TOTAL_ACTIVE_BASE = 9100
 
     # --- reactive helpers -------------------------------------------------
 
@@ -96,22 +95,22 @@ def server(input, output, session):
         # First login map from all time (respecting current tenancy/env/component filters)
         usage_all = usage_base()
         first_map = (
-            usage_all.groupby("user_id")["login_time"].min()
+            usage_all.groupby("user_name")["last_seen"].min()
             if not usage_all.empty
             else pd.Series(dtype="datetime64[ns]")
         )
         # Sum logins per user in the window
         sums = (
-            usage.groupby("user_id", as_index=False)["logins"]
+            usage.groupby("user_name", as_index=False)["logins"]
             .sum()
-            .rename(columns={"user_id": "userId", "logins": "loginCount"})
+            .rename(columns={"user_name": "userId", "logins": "loginCount"})
         )
         # Latest login per user with associated tenancy/component/env
         latest = (
-            usage.sort_values("login_time")
-            .groupby("user_id", as_index=False)
+            usage.sort_values("last_seen")
+            .groupby("user_name", as_index=False)
             .tail(1)
-            .rename(columns={"user_id": "userId", "login_time": "lastLogin"})
+            .rename(columns={"user_name": "userId", "last_seen": "lastLogin"})
         )
         merged = (
             latest[["userId", "tenancy", "component", "environment", "lastLogin"]]
@@ -129,26 +128,26 @@ def server(input, output, session):
     def filtered_users_prev_period():
         start, end = comparison_period()
         usage = usage_base()
-        usage = usage[(usage["login_time"] >= start) & (usage["login_time"] <= end)]
+        usage = usage[(usage["last_seen"] >= start) & (usage["last_seen"] <= end)]
         return _aggregate_users(usage)
 
     def _timeseries_for_range(start, end):
         """Aggregate usage into a daily timeseries for a given date window and current filters."""
         usage = usage_base()
         usage = usage[
-            (usage["login_time"] >= start) & (usage["login_time"] <= end)
+            (usage["last_seen"] >= start) & (usage["last_seen"] <= end)
         ].copy()
         if usage.empty:
             return pd.DataFrame(
                 columns=["date", "activeUsers", "regularUsers", "powerUsers", "totalLogins"]
             )
         df = (
-            usage.assign(date=usage["login_time"].dt.normalize())
+            usage.assign(date=usage["last_seen"].dt.normalize())
             .groupby("date", as_index=False)
             .agg(
-                activeUsers=("user_id", "nunique"),
-                regularUsers=("user_id", "nunique"),
-                powerUsers=("user_id", "nunique"),
+                activeUsers=("user_name", "nunique"),
+                regularUsers=("user_name", "nunique"),
+                powerUsers=("user_name", "nunique"),
                 totalLogins=("logins", "sum"),
             )
         )
@@ -175,7 +174,7 @@ def server(input, output, session):
         if tenancy_val != "All Tenancies":
             usage = usage[usage["tenancy"] == tenancy_val]
         if env_val != "All Environments":
-            usage = usage[usage["environment"] == env_val]
+            usage = usage[usage["product"] == env_val]
         if comp_val and comp_val != "All Components":
             usage = usage[usage["component"] == comp_val]
         return usage
@@ -184,7 +183,7 @@ def server(input, output, session):
         start, end = current_period()
         usage = usage_base()
         usage = usage[
-            (usage["login_time"] >= start) & (usage["login_time"] <= end)
+            (usage["last_seen"] >= start) & (usage["last_seen"] <= end)
         ].copy()
         return usage
 
@@ -193,29 +192,29 @@ def server(input, output, session):
         """Unique users up to end of current period (respecting filters)."""
         _, end = current_period()
         usage = usage_base()
-        usage = usage[usage["login_time"] <= end]
-        return set(usage["user_id"].unique())
+        usage = usage[usage["last_seen"] <= end]
+        return set(usage["user_name"].unique())
 
     @reactive.Calc
     def user_scope_cumulative_previous():
         """Unique users up to end of comparison period (respecting filters)."""
         _, comp_end = comparison_period()
         usage = usage_base()
-        usage = usage[usage["login_time"] <= comp_end]
-        return set(usage["user_id"].unique())
+        usage = usage[usage["last_seen"] <= comp_end]
+        return set(usage["user_name"].unique())
 
     @reactive.Calc
     def user_scope_current():
         """Unique users with activity in the current period."""
-        return set(usage_filtered()["user_id"].unique())
+        return set(usage_filtered()["user_name"].unique())
 
     @reactive.Calc
     def user_scope_previous():
         """Unique users with activity in the comparison period (same length as current)."""
         start, end = comparison_period()
         usage = usage_base()
-        usage = usage[(usage["login_time"] >= start) & (usage["login_time"] <= end)]
-        return set(usage["user_id"].unique())
+        usage = usage[(usage["last_seen"] >= start) & (usage["last_seen"] <= end)]
+        return set(usage["user_name"].unique())
 
     @reactive.Calc
     def total_users_cumulative():
@@ -234,7 +233,7 @@ def server(input, output, session):
         usage = usage_base()
         if usage.empty:
             return pd.Series(dtype="datetime64[ns]")
-        return usage.groupby("user_id")["login_time"].min()
+        return usage.groupby("user_name")["last_seen"].min()
 
     @reactive.Calc
     def tenancy_usage_base():
@@ -247,7 +246,7 @@ def server(input, output, session):
         start, end = current_period()
         usage = tenancy_usage_base()
         usage = usage[
-            (usage["login_time"] >= start) & (usage["login_time"] <= end)
+            (usage["last_seen"] >= start) & (usage["last_seen"] <= end)
         ].copy()
         return usage
 
@@ -622,7 +621,7 @@ def server(input, output, session):
         if usage.empty:
             return ui.tags.div("No data for selected period", class_="app-muted")
 
-        user_logins = usage.groupby("user_id")["logins"].sum() / weeks
+        user_logins = usage.groupby("user_name")["logins"].sum() / weeks
         logins_per_week = user_logins.reindex(user_logins.index, fill_value=0)
         inactive = max(not_logged_in_current(), 0)
         if inactive:
@@ -662,22 +661,22 @@ def server(input, output, session):
             fig = px.line(title="No data for selected period")
             return render_plotly(fig)
 
-        usage = usage.assign(week=usage["login_time"].dt.to_period("W-MON").dt.start_time)
+        usage = usage.assign(week=usage["last_seen"].dt.to_period("W-MON").dt.start_time)
         weeks = sorted(usage["week"].unique())
 
         # Active users per week within the selected window
         active_weekly = (
-            usage.groupby("week")["user_id"].nunique().reindex(weeks, fill_value=0)
+            usage.groupby("week")["user_name"].nunique().reindex(weeks, fill_value=0)
         )
 
         # Cumulative total users up to each week using all history for the filters
         base_raw = usage_base()
-        base = base_raw.assign(week=base_raw["login_time"].dt.to_period("W-MON").dt.start_time)
+        base = base_raw.assign(week=base_raw["last_seen"].dt.to_period("W-MON").dt.start_time)
         cumulative_totals = []
         for wk in weeks:
             cutoff = wk + pd.Timedelta(days=6)
             cumulative_totals.append(
-                base[base["login_time"] <= cutoff]["user_id"].nunique()
+                base[base["last_seen"] <= cutoff]["user_name"].nunique()
             )
 
         df_plot = pd.DataFrame(
@@ -709,7 +708,7 @@ def server(input, output, session):
             fig = px.line(title="No data for selected period")
             return render_plotly(fig)
 
-        usage = usage.assign(week=usage["login_time"].dt.to_period("W-MON").dt.start_time)
+        usage = usage.assign(week=usage["last_seen"].dt.to_period("W-MON").dt.start_time)
         df_weekly = (
             usage.groupby("week")
             .agg(
@@ -748,7 +747,7 @@ def server(input, output, session):
         weeks = max(days / 7, 1)
         usage_all = usage_base()
         total_logins_map = (
-            usage_all.groupby("user_id")["logins"].sum() if not usage_all.empty else pd.Series(dtype="float")
+            usage_all.groupby("user_name")["logins"].sum() if not usage_all.empty else pd.Series(dtype="float")
         )
 
         def fmt_date(series: pd.Series) -> pd.Series:
@@ -809,7 +808,7 @@ def server(input, output, session):
         df = filtered_users_by_pid().copy()
         usage_all = usage_base()
         total_logins_map = (
-            usage_all.groupby("user_id")["logins"].sum() if not usage_all.empty else pd.Series(dtype="float")
+            usage_all.groupby("user_name")["logins"].sum() if not usage_all.empty else pd.Series(dtype="float")
         )
         if df.empty:
             cols = [
@@ -877,10 +876,10 @@ def server(input, output, session):
             fig = px.bar(title="No data")
             return render_plotly(fig)
         agg = (
-            usage.groupby(["tenancy", "component"])["user_id"]
+            usage.groupby(["tenancy", "component"])["user_name"]
             .nunique()
             .reset_index()
-            .rename(columns={"user_id": "Users", "tenancy": "Tenancy", "component": "Component"})
+            .rename(columns={"user_name": "Users", "tenancy": "Tenancy", "component": "Component"})
         )
         long = agg
         fig = px.bar(
@@ -903,10 +902,10 @@ def server(input, output, session):
             fig = px.bar(title="No data")
             return render_plotly(fig)
         active = (
-            usage.groupby(["tenancy", "component"])["user_id"]
+            usage.groupby(["tenancy", "component"])["user_name"]
             .nunique()
             .reset_index()
-            .rename(columns={"user_id": "Users", "tenancy": "Tenancy", "component": "Component"})
+            .rename(columns={"user_name": "Users", "tenancy": "Tenancy", "component": "Component"})
         )
         long = active
         fig = px.bar(
@@ -954,16 +953,16 @@ def server(input, output, session):
         usage_all_comp = usage_all[usage_all["component"] == component]
 
         active_users = (
-            usage_range_comp.groupby("tenancy")["user_id"]
+            usage_range_comp.groupby("tenancy")["user_name"]
             .nunique()
             .reset_index()
-            .rename(columns={"tenancy": "Tenancy", "user_id": "Active users (Date range)"})
+            .rename(columns={"tenancy": "Tenancy", "user_name": "Active users (Date range)"})
         )
         total_users = (
-            usage_all_comp.groupby("tenancy")["user_id"]
+            usage_all_comp.groupby("tenancy")["user_name"]
             .nunique()
             .reset_index()
-            .rename(columns={"tenancy": "Tenancy", "user_id": "Total users (To date)"})
+            .rename(columns={"tenancy": "Tenancy", "user_name": "Total users (To date)"})
         )
         logins_range = (
             usage_range_comp.groupby("tenancy")["logins"]

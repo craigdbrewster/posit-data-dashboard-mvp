@@ -8,36 +8,25 @@ DATA_DIR = "data"
 TOTAL_USERS = 10500
 TOTAL_CONNECT_LICENCES = 10000
 TOTAL_WORKBENCH_LICENCES = 5000
-NEW_USERS = 50  # static for MVP
 
 USAGE_LOG_PATH = os.path.join(DATA_DIR, "usage_log.json")
 
-# Load unified usage log from JSON and normalize column names
-raw_log = pd.read_json(USAGE_LOG_PATH, convert_dates=["last_seen"])
-usage_log = raw_log.rename(
-    columns={
-        "user_name": "user_id",
-        "product": "environment",
-        "last_seen": "login_time",
-    }
-)
+# Load unified usage log from JSON (fields match the source API)
+usage_log = pd.read_json(USAGE_LOG_PATH, convert_dates=["last_seen"])
 # Each record is a login event; derive logins by counting occurrences
 usage_log["logins"] = 1
 
-# Enforce single tenancy/product per user (most recent record wins)
-latest_attrs = (
-    usage_log.sort_values("login_time")
-    .groupby("user_id", as_index=False)
-    .tail(1)[["user_id", "tenancy", "environment"]]
-)
-tenancy_map = latest_attrs.set_index("user_id")["tenancy"]
-env_map = latest_attrs.set_index("user_id")["environment"]
-usage_log["tenancy"] = usage_log["user_id"].map(tenancy_map)
-usage_log["environment"] = usage_log["user_id"].map(env_map)
+# Dynamic total users derived from the data (unique user_name)
+TOTAL_USERS = usage_log["user_name"].nunique()
+
+# Validate single tenancy/product per user to fail fast on bad inputs
+_counts = usage_log.groupby("user_name").agg(tenancies=("tenancy", "nunique"), products=("product", "nunique"))
+if (_counts["tenancies"] > 1).any() or (_counts["products"] > 1).any():
+    raise ValueError("Each user_name must map to exactly one tenancy and one product in usage_log.json")
 
 # Defaults for date range based on usage log
-max_date = usage_log["login_time"].max().normalize()
-min_date = usage_log["login_time"].min().normalize()
+max_date = usage_log["last_seen"].max().normalize()
+min_date = usage_log["last_seen"].min().normalize()
 default_end = max_date.date()
 default_start = (max_date - timedelta(days=29)).date()
 
@@ -49,7 +38,7 @@ def tenancy_choices():
 
 def environment_choices():
     base = ["Production", "Development", "Staging"]
-    data_vals = sorted(usage_log["environment"].unique())
+    data_vals = sorted(usage_log["product"].unique())
     merged = []
     for val in base + list(data_vals):
         if val not in merged:
@@ -64,21 +53,19 @@ def component_choices():
 
 # Derived users summary (per user)
 users = (
-    usage_log.groupby(
-        ["user_id", "tenancy", "component", "environment"], as_index=False
-    )
+    usage_log.groupby(["user_name", "tenancy", "component", "product"], as_index=False)
     .agg(
-        lastLogin=("login_time", "max"),
+        lastLogin=("last_seen", "max"),
         loginCount=("logins", "sum"),
     )
-    .rename(columns={"user_id": "userId"})
+    .rename(columns={"user_name": "userId", "product": "environment"})
 )
 
 # Derived tenancies summary
 tenancies = (
     usage_log.groupby(["tenancy", "component"], as_index=False)
     .agg(
-        activeUsers=("user_id", "nunique"),
+        activeUsers=("user_name", "nunique"),
         totalLogins=("logins", "sum"),
     )
 )
@@ -92,20 +79,8 @@ tenancies["connectUsers"] = tenancies.apply(
 
 # Derived licences (approximate: assigned equals unique users per tenancy/component)
 licences = (
-    usage_log.groupby(["tenancy", "component"])["user_id"]
+    usage_log.groupby(["tenancy", "component"])["user_name"]
     .nunique()
     .reset_index()
-    .rename(columns={"user_id": "licencesUsed"})
-)
-
-# Derived timeseries (daily)
-timeseries = (
-    usage_log.assign(date=usage_log["login_time"].dt.normalize())
-    .groupby("date", as_index=False)
-    .agg(
-        activeUsers=("user_id", "nunique"),
-        regularUsers=("user_id", "nunique"),
-        powerUsers=("user_id", "nunique"),
-        totalLogins=("logins", "sum"),
-    )
+    .rename(columns={"user_name": "licencesUsed"})
 )
