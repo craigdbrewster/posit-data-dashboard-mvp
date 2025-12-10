@@ -909,8 +909,6 @@ def server(input, output, session):
         fig.update_layout(legend_title_text="Component")
         return render_plotly(fig)
 
-    @output
-    @render.ui
     def _tenancy_component_table(component: str):
         usage_range = tenancy_usage()
         env_val = input.tenancy_environment()
@@ -920,27 +918,29 @@ def server(input, output, session):
         usage_range_comp = usage_range[usage_range["component"] == component]
         usage_all_comp = usage_all[usage_all["component"] == component]
 
-        def _agg(df: pd.DataFrame, value_col: str, agg) -> pd.DataFrame:
-            if df.empty:
-                return pd.DataFrame(columns=["Tenancy", value_col])
-            return (
-                df.groupby("tenancy")[value_col]
-                .agg(agg)
-                .reset_index()
-                .rename(columns={"tenancy": "Tenancy", value_col: value_col})
-            )
-
-        active_users = _agg(usage_range_comp, "user_id", "nunique").rename(
-            columns={"user_id": "Active users (Date range)"}
+        active_users = (
+            usage_range_comp.groupby("tenancy")["user_id"]
+            .nunique()
+            .reset_index()
+            .rename(columns={"tenancy": "Tenancy", "user_id": "Active users (Date range)"})
         )
-        total_users = _agg(usage_all_comp, "user_id", "nunique").rename(
-            columns={"user_id": "Total users (To date)"}
+        total_users = (
+            usage_all_comp.groupby("tenancy")["user_id"]
+            .nunique()
+            .reset_index()
+            .rename(columns={"tenancy": "Tenancy", "user_id": "Total users (To date)"})
         )
-        logins_range = _agg(usage_range_comp, "logins", "sum").rename(
-            columns={"logins": "Total logins (Date range)"}
+        logins_range = (
+            usage_range_comp.groupby("tenancy")["logins"]
+            .sum()
+            .reset_index()
+            .rename(columns={"tenancy": "Tenancy", "logins": "Total logins (Date range)"})
         )
-        logins_total = _agg(usage_all_comp, "logins", "sum").rename(
-            columns={"logins": "Total logins (To date)"}
+        logins_total = (
+            usage_all_comp.groupby("tenancy")["logins"]
+            .sum()
+            .reset_index()
+            .rename(columns={"tenancy": "Tenancy", "logins": "Total logins (To date)"})
         )
 
         merged = (
