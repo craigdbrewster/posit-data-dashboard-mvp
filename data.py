@@ -10,10 +10,19 @@ TOTAL_CONNECT_LICENCES = 10000
 TOTAL_WORKBENCH_LICENCES = 5000
 NEW_USERS = 50  # static for MVP
 
-USAGE_LOG_PATH = os.path.join(DATA_DIR, "usage_log.csv")
+USAGE_LOG_PATH = os.path.join(DATA_DIR, "usage_log.json")
 
-# Load unified usage log (expected to exist)
-usage_log = pd.read_csv(USAGE_LOG_PATH, parse_dates=["login_time"])
+# Load unified usage log from JSON and normalize column names
+raw_log = pd.read_json(USAGE_LOG_PATH, convert_dates=["last_seen"])
+usage_log = raw_log.rename(
+    columns={
+        "user_name": "user_id",
+        "product": "environment",
+        "last_seen": "login_time",
+    }
+)
+# Each record is a login event; derive logins by counting occurrences
+usage_log["logins"] = 1
 
 # Defaults for date range based on usage log
 max_date = usage_log["login_time"].max().normalize()
