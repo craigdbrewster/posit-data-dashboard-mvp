@@ -118,16 +118,16 @@ def server(input, output, session):
         usage = usage[(usage["login_time"] >= start) & (usage["login_time"] <= end)]
         return _aggregate_users(usage)
 
-    @reactive.Calc
-    def filtered_timeseries():
-        start, end = current_period()
-        df = data.timeseries[
-            (data.timeseries["date"] >= start) & (data.timeseries["date"] <= end)
+    def _timeseries_for_range(start, end):
+        """Aggregate usage into a daily timeseries for a given date window and current filters."""
+        usage = usage_base()
+        usage = usage[
+            (usage["login_time"] >= start) & (usage["login_time"] <= end)
         ].copy()
-        # apply tenancy/environment filters using the usage log info
-        usage = usage_filtered()
         if usage.empty:
-            return df.iloc[0:0]
+            return pd.DataFrame(
+                columns=["date", "activeUsers", "regularUsers", "powerUsers", "totalLogins"]
+            )
         df = (
             usage.assign(date=usage["login_time"].dt.normalize())
             .groupby("date", as_index=False)
@@ -140,12 +140,24 @@ def server(input, output, session):
         )
         return df
 
-    def usage_base():
-        """Apply tenancy/env/component filters, without date restriction."""
+    @reactive.Calc
+    def filtered_timeseries():
+        start, end = current_period()
+        return _timeseries_for_range(start, end)
+
+    def usage_base(
+        tenancy_val=None,
+        env_val=None,
+        comp_val=None,
+    ):
+        """
+        Apply tenancy/environment/component filters to the unified log.
+        Defaults pull from current inputs when not provided.
+        """
         usage = data.usage_log.copy()
-        tenancy_val = input.tenancy()
-        env_val = input.environment()
-        comp_val = user_component()
+        tenancy_val = tenancy_val if tenancy_val is not None else input.tenancy()
+        env_val = env_val if env_val is not None else input.environment()
+        comp_val = comp_val if comp_val is not None else user_component()
         if tenancy_val != "All Tenancies":
             usage = usage[usage["tenancy"] == tenancy_val]
         if env_val != "All Environments":
@@ -167,10 +179,6 @@ def server(input, output, session):
         usage = usage_base()
         usage = usage[usage["login_time"] <= end_date].copy()
         return usage
-
-    @reactive.Calc
-    def usage_window():
-        return usage_filtered()
 
     @reactive.Calc
     def user_scope_all():
@@ -211,14 +219,18 @@ def server(input, output, session):
         return usage.groupby("user_id")["login_time"].min()
 
     @reactive.Calc
+    def tenancy_usage_base():
+        """Base usage for Tenancies tab using its environment selector."""
+        env_val = input.tenancy_environment()
+        return usage_base(env_val=env_val, tenancy_val="All Tenancies", comp_val=None)
+
+    @reactive.Calc
     def tenancy_usage():
         start, end = current_period()
-        usage = data.usage_log[
-            (data.usage_log["login_time"] >= start) & (data.usage_log["login_time"] <= end)
+        usage = tenancy_usage_base()
+        usage = usage[
+            (usage["login_time"] >= start) & (usage["login_time"] <= end)
         ].copy()
-        env_val = input.tenancy_environment()
-        if env_val != "All Environments":
-            usage = usage[usage["environment"] == env_val]
         return usage
 
     @reactive.Calc
@@ -280,9 +292,7 @@ def server(input, output, session):
     def sessions_per_user_previous():
         """Average sessions per user in comparison period."""
         start, end = comparison_period()
-        df = data.timeseries[
-            (data.timeseries["date"] >= start) & (data.timeseries["date"] <= end)
-        ]
+        df = _timeseries_for_range(start, end)
         df_users = filtered_users_prev_period()
         if df.empty or len(df_users) == 0:
             return 0.0
@@ -519,9 +529,7 @@ def server(input, output, session):
         daily_current = latest_current["powerUsers"]
 
         prev_start, prev_end = comparison_period()
-        df_prev = data.timeseries[
-            (data.timeseries["date"] >= prev_start) & (data.timeseries["date"] <= prev_end)
-        ]
+        df_prev = _timeseries_for_range(prev_start, prev_end)
         if df_prev.empty:
             return ""
         latest_prev = df_prev.sort_values("date").iloc[-1]
@@ -553,9 +561,7 @@ def server(input, output, session):
         weekly_current = latest_current["regularUsers"]
 
         prev_start, prev_end = comparison_period()
-        df_prev = data.timeseries[
-            (data.timeseries["date"] >= prev_start) & (data.timeseries["date"] <= prev_end)
-        ]
+        df_prev = _timeseries_for_range(prev_start, prev_end)
         if df_prev.empty:
             return ""
         latest_prev = df_prev.sort_values("date").iloc[-1]
@@ -915,10 +921,7 @@ def server(input, output, session):
 
     def _tenancy_component_table(component: str):
         usage_range = tenancy_usage()
-        env_val = input.tenancy_environment()
-        usage_all = data.usage_log.copy()
-        if env_val != "All Environments":
-            usage_all = usage_all[usage_all["environment"] == env_val]
+        usage_all = tenancy_usage_base()
         usage_range_comp = usage_range[usage_range["component"] == component]
         usage_all_comp = usage_all[usage_all["component"] == component]
 
