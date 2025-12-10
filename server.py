@@ -184,9 +184,9 @@ def server(input, output, session):
     @reactive.Calc
     def active_users_current():
         """Unique users with activity in the current period (respecting filters)."""
-        usage = usage_window()
-        active = usage["user_id"].nunique()
-        return min(active, total_users_cumulative() if total_users_cumulative() else active)
+        active = filtered_users()["userId"].nunique()
+        total = total_users_cumulative()
+        return min(active, total if total else active)
 
     def first_seen_series():
         """First login per user for current tenancy/env/component filters."""
@@ -247,10 +247,9 @@ def server(input, output, session):
     @reactive.Calc
     def not_logged_in_current():
         """Users from the filtered population with no logins in the current period."""
-        all_usage = usage_base()
-        all_user_ids = set(all_usage["user_id"].unique())
-        logged_in_ids = set(filtered_users()["userId"])
-        return max(len(all_user_ids - logged_in_ids), 0)
+        total_scope = total_users_cumulative()
+        active = filtered_users()["userId"].nunique()
+        return max(total_scope - active, 0)
 
     @reactive.Calc
     def sessions_per_user_current():
