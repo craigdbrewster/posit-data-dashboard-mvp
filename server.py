@@ -233,6 +233,12 @@ def server(input, output, session):
         ].copy()
         return usage
 
+    def _dedupe_latest_by_user(df: pd.DataFrame) -> pd.DataFrame:
+        """Keep the latest record per user_id to avoid double-counting across tenancies."""
+        if df.empty:
+            return df
+        return df.sort_values("login_time").groupby("user_id", as_index=False).tail(1)
+
     @reactive.Calc
     def filtered_users_by_pid():
         """Filter users table by PID search."""
@@ -848,6 +854,7 @@ def server(input, output, session):
         if usage.empty:
             fig = px.bar(title="No data")
             return render_plotly(fig)
+        usage = _dedupe_latest_by_user(usage)
         agg = (
             usage.groupby(["tenancy", "component"])["user_id"]
             .nunique()
@@ -874,6 +881,7 @@ def server(input, output, session):
         if usage.empty:
             fig = px.bar(title="No data")
             return render_plotly(fig)
+        usage = _dedupe_latest_by_user(usage)
         active = (
             usage.groupby(["tenancy", "component"])["user_id"]
             .nunique()
@@ -925,14 +933,17 @@ def server(input, output, session):
         usage_range_comp = usage_range[usage_range["component"] == component]
         usage_all_comp = usage_all[usage_all["component"] == component]
 
+        usage_range_comp_users = _dedupe_latest_by_user(usage_range_comp)
+        usage_all_comp_users = _dedupe_latest_by_user(usage_all_comp)
+
         active_users = (
-            usage_range_comp.groupby("tenancy")["user_id"]
+            usage_range_comp_users.groupby("tenancy")["user_id"]
             .nunique()
             .reset_index()
             .rename(columns={"tenancy": "Tenancy", "user_id": "Active users (Date range)"})
         )
         total_users = (
-            usage_all_comp.groupby("tenancy")["user_id"]
+            usage_all_comp_users.groupby("tenancy")["user_id"]
             .nunique()
             .reset_index()
             .rename(columns={"tenancy": "Tenancy", "user_id": "Total users (To date)"})
