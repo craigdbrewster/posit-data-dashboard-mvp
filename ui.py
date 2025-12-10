@@ -219,13 +219,25 @@ app_ui = ui.page_fluid(
             table {
                 width: 100%;
             }
+            table.sortable th {
+                position: relative;
+                padding-right: 14px;
+            }
+            table.sortable th::after {
+                content: "⇅";
+                font-size: 11px;
+                opacity: 0.4;
+                margin-left: 4px;
+            }
             table.sortable th.sort-asc::after {
                 content: " ▲";
                 font-size: 12px;
+                opacity: 1;
             }
             table.sortable th.sort-desc::after {
                 content: " ▼";
                 font-size: 12px;
+                opacity: 1;
             }
             .shiny-data-grid table {
                 font-size: 14px;
