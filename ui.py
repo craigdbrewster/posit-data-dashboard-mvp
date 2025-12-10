@@ -358,7 +358,7 @@ app_ui = ui.page_fluid(
             }
             .licence-filter-row {
                 display: grid;
-                grid-template-columns: minmax(220px, 260px) 1fr;
+                grid-template-columns: 1fr;
                 gap: 12px;
                 align-items: stretch;
             }
@@ -495,11 +495,6 @@ app_ui = ui.page_fluid(
                     ui.tags.div(
                         {"class": "licence-filter-row"},
                         ui.tags.div(
-                            {"class": "app-card licence-card"},
-                            ui.tags.div({"class": "app-card__label"}, "Licences available"),
-                            ui.tags.div({"class": "app-card__value"}, ui.output_text("licences_available")),
-                        ),
-                        ui.tags.div(
                             {"class": "filter-card"},
                             ui.tags.div(
                                 {"class": "app-filter-bar"},
@@ -545,6 +540,10 @@ app_ui = ui.page_fluid(
                             "Active users",
                             ui.output_text("users_active"),
                             ui.output_text("users_active_change"),
+                        ),
+                        metric_card(
+                            "Inactive users",
+                            ui.output_text("users_inactive"),
                         ),
                     ),
                     ui.tags.div(

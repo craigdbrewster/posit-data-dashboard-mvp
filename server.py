@@ -469,6 +469,11 @@ def server(input, output, session):
 
     @output
     @render.text
+    def users_inactive():
+        return f"{not_logged_in_current():,}"
+
+    @output
+    @render.text
     def users_dormant():
         return "900"
 
@@ -714,9 +719,9 @@ def server(input, output, session):
                 "Tenancy",
                 "Environment",
                 "Last login",
-                "Total logins in current date range",
-                "Total logins to date",
-                "Average logins per week",
+                "Total logins\n(date range)",
+                "Total logins\n(to date)",
+                "Avg logins\n(per week)",
             ]
             empty_df = pd.DataFrame(
                 columns=cols
@@ -732,20 +737,20 @@ def server(input, output, session):
                 "tenancy": "Tenancy",
                 "environment": "Environment",
                 "lastLogin": "Last login",
-                "loginCount": "Total logins in current date range",
+                "loginCount": "Total logins\n(date range)",
             }
         )
-        out["Total logins to date"] = out["PID"].map(total_logins_map).fillna(0).astype(int)
+        out["Total logins\n(to date)"] = out["PID"].map(total_logins_map).fillna(0).astype(int)
         out["Last login"] = fmt_last_login(out["Last login"])
-        out["Average logins per week"] = (out["Total logins in current date range"] / weeks).round(1)
+        out["Avg logins\n(per week)"] = (out["Total logins\n(date range)"] / weeks).round(1)
         final_cols = [
             "PID",
             "Tenancy",
             "Environment",
             "Last login",
-            "Total logins in current date range",
-            "Total logins to date",
-            "Average logins per week",
+            "Total logins\n(date range)",
+            "Total logins\n(to date)",
+            "Avg logins\n(per week)",
         ]
         out = out[final_cols]
         return ui.HTML(out.to_html(index=False, classes="full-table", border=0))
@@ -764,9 +769,9 @@ def server(input, output, session):
                 "Tenancy",
                 "Environment",
                 "Last login",
-                "Total logins in current date range",
-                "Total logins to date",
-                "Average logins per week",
+                "Total logins\n(date range)",
+                "Total logins\n(to date)",
+                "Avg logins\n(per week)",
             ]
             df = pd.DataFrame(columns=cols)
         else:
@@ -786,20 +791,20 @@ def server(input, output, session):
                 "tenancy": "Tenancy",
                 "environment": "Environment",
                 "lastLogin": "Last login",
-                "loginCount": "Total logins in current date range",
+                "loginCount": "Total logins\n(date range)",
             }
             df = df.rename(columns=rename_map)
-            df["Total logins to date"] = df["PID"].map(total_logins_map).fillna(0).astype(int)
+            df["Total logins\n(to date)"] = df["PID"].map(total_logins_map).fillna(0).astype(int)
             df["Last login"] = fmt_last_login(df["Last login"])
-            df["Average logins per week"] = (df["Total logins in current date range"] / weeks).round(1)
+            df["Avg logins\n(per week)"] = (df["Total logins\n(date range)"] / weeks).round(1)
             final_cols = [
                 "PID",
                 "Tenancy",
                 "Environment",
                 "Last login",
-                "Total logins in current date range",
-                "Total logins to date",
-                "Average logins per week",
+                "Total logins\n(date range)",
+                "Total logins\n(to date)",
+                "Avg logins\n(per week)",
             ]
             df = df[final_cols]
 
