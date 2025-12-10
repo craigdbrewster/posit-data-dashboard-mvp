@@ -174,9 +174,11 @@ def server(input, output, session):
 
     @reactive.Calc
     def total_users_cumulative():
-        """Cumulative unique users up to the end of the current period (respecting filters)."""
-        _, end = current_period()
-        usage = usage_cumulative(end)
+        """
+        Total unique users from the (filtered) usage log, ignoring date range.
+        This matches the total user list used for inactive counts.
+        """
+        usage = usage_base()
         return usage["user_id"].nunique()
 
     @reactive.Calc
@@ -244,22 +246,11 @@ def server(input, output, session):
 
     @reactive.Calc
     def not_logged_in_current():
-        """Users not logged in during current period."""
-        tenancy_val = input.tenancy()
-        env_val = input.environment()
-        comp_val = user_component()
-
-        all_users = data.users.copy()
-        if tenancy_val != "All Tenancies":
-            all_users = all_users[all_users["tenancy"] == tenancy_val]
-        if env_val != "All Environments":
-            all_users = all_users[all_users["environment"] == env_val]
-        if comp_val != "All Components":
-            all_users = all_users[all_users["component"] == comp_val]
-
+        """Users from the filtered population with no logins in the current period."""
+        all_usage = usage_base()
+        all_user_ids = set(all_usage["user_id"].unique())
         logged_in_ids = set(filtered_users()["userId"])
-        not_logged_in = len(all_users[~all_users["userId"].isin(logged_in_ids)])
-        return not_logged_in
+        return max(len(all_user_ids - logged_in_ids), 0)
 
     @reactive.Calc
     def sessions_per_user_current():
@@ -475,7 +466,8 @@ def server(input, output, session):
     @output
     @render.text
     def users_inactive_change():
-        total_scope = len(data.users)
+        # Compare inactive users between current and previous date windows
+        total_scope = usage_base()["user_id"].nunique()
         prev_active = len(filtered_users_prev_period())
         prev_inactive = max(total_scope - prev_active, 0)
         current = not_logged_in_current()
