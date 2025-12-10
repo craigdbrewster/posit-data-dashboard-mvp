@@ -474,6 +474,20 @@ def server(input, output, session):
 
     @output
     @render.text
+    def users_inactive_change():
+        total_scope = len(data.users)
+        prev_active = len(filtered_users_prev_period())
+        prev_inactive = max(total_scope - prev_active, 0)
+        current = not_logged_in_current()
+        if prev_inactive == 0:
+            change = 0.0 if current == 0 else 100.0
+        else:
+            change = (current - prev_inactive) / prev_inactive * 100
+        arrow = "▲" if change >= 0 else "▼"
+        return f"{arrow} {change:.1f}% vs previous period"
+
+    @output
+    @render.text
     def users_dormant():
         return "900"
 
@@ -897,112 +911,82 @@ def server(input, output, session):
 
     @output
     @render.ui
-    def tenancies_table_all():
+    def _tenancy_component_table(component: str):
         usage_range = tenancy_usage()
-        start, end = current_period()
         env_val = input.tenancy_environment()
         usage_all = data.usage_log.copy()
         if env_val != "All Environments":
             usage_all = usage_all[usage_all["environment"] == env_val]
+        usage_range_comp = usage_range[usage_range["component"] == component]
+        usage_all_comp = usage_all[usage_all["component"] == component]
 
-        def _pivot(df: pd.DataFrame, value_col: str, agg, suffix: str):
+        def _agg(df: pd.DataFrame, value_col: str, agg) -> pd.DataFrame:
             if df.empty:
-                return pd.DataFrame(columns=["Tenancy", f"Connect {suffix}", f"Workbench {suffix}"])
-            pivoted = (
-                df.groupby(["tenancy", "component"])[value_col]
+                return pd.DataFrame(columns=["Tenancy", value_col])
+            return (
+                df.groupby("tenancy")[value_col]
                 .agg(agg)
-                .unstack(fill_value=0)
-                .rename(columns={"Connect": f"Connect {suffix}", "Workbench": f"Workbench {suffix}"})
                 .reset_index()
-                .rename(columns={"tenancy": "Tenancy"})
+                .rename(columns={"tenancy": "Tenancy", value_col: value_col})
             )
-            return pivoted
 
-        active_users = _pivot(usage_range, "user_id", "nunique", "active users in current date range")
-        total_users = _pivot(usage_all, "user_id", "nunique", "total users to date")
-        current_logins = _pivot(usage_range, "logins", "sum", "logins in current date range")
-        total_logins = _pivot(usage_all, "logins", "sum", "logins to date")
+        active_users = _agg(usage_range_comp, "user_id", "nunique").rename(
+            columns={"user_id": "Active users (Date range)"}
+        )
+        total_users = _agg(usage_all_comp, "user_id", "nunique").rename(
+            columns={"user_id": "Total users (To date)"}
+        )
+        logins_range = _agg(usage_range_comp, "logins", "sum").rename(
+            columns={"logins": "Total logins (Date range)"}
+        )
+        logins_total = _agg(usage_all_comp, "logins", "sum").rename(
+            columns={"logins": "Total logins (To date)"}
+        )
 
         merged = (
             total_users.merge(active_users, on="Tenancy", how="outer")
-            .merge(current_logins, on="Tenancy", how="outer")
-            .merge(total_logins, on="Tenancy", how="outer")
+            .merge(logins_range, on="Tenancy", how="outer")
+            .merge(logins_total, on="Tenancy", how="outer")
         ).fillna(0)
 
         cols = [
             "Tenancy",
-            "Connect active users in current date range",
-            "Connect total users to date",
-            "Connect logins in current date range",
-            "Connect logins to date",
-            "Workbench active users in current date range",
-            "Workbench total users to date",
-            "Workbench logins in current date range",
-            "Workbench logins to date",
+            "Active users (Date range)",
+            "Total users (To date)",
+            "Total logins (Date range)",
+            "Total logins (To date)",
         ]
         for col in cols:
             if col not in merged.columns:
                 merged[col] = 0
         merged = merged[cols]
-        # Ensure integer outputs
         int_cols = [c for c in cols if c != "Tenancy"]
         merged[int_cols] = merged[int_cols].astype(int)
-        table = merged.sort_values("Tenancy")
-        return ui.HTML(table.to_html(index=False, classes="full-table", border=0))
+        return merged.sort_values("Tenancy")
+
+    @output
+    @render.ui
+    def tenancies_table_connect():
+        df = _tenancy_component_table("Connect")
+        return ui.HTML(df.to_html(index=False, classes="full-table", border=0))
+
+    @output
+    @render.ui
+    def tenancies_table_workbench():
+        df = _tenancy_component_table("Workbench")
+        return ui.HTML(df.to_html(index=False, classes="full-table", border=0))
 
     @output
     @render.download(filename="tenancies.csv")
     def download_tenancies():
-        usage_range = tenancy_usage()
-        env_val = input.tenancy_environment()
-        usage_all = data.usage_log.copy()
-        if env_val != "All Environments":
-            usage_all = usage_all[usage_all["environment"] == env_val]
-
-        def _pivot(df: pd.DataFrame, value_col: str, agg, suffix: str):
-            if df.empty:
-                return pd.DataFrame(columns=["Tenancy", f"Connect {suffix}", f"Workbench {suffix}"])
-            pivoted = (
-                df.groupby(["tenancy", "component"])[value_col]
-                .agg(agg)
-                .unstack(fill_value=0)
-                .rename(columns={"Connect": f"Connect {suffix}", "Workbench": f"Workbench {suffix}"})
-                .reset_index()
-                .rename(columns={"tenancy": "Tenancy"})
-            )
-            return pivoted
-
-        active_users = _pivot(usage_range, "user_id", "nunique", "active users in current date range")
-        total_users = _pivot(usage_all, "user_id", "nunique", "total users to date")
-        current_logins = _pivot(usage_range, "logins", "sum", "logins in current date range")
-        total_logins = _pivot(usage_all, "logins", "sum", "logins to date")
-
-        merged = (
-            total_users.merge(active_users, on="Tenancy", how="outer")
-            .merge(current_logins, on="Tenancy", how="outer")
-            .merge(total_logins, on="Tenancy", how="outer")
-        ).fillna(0)
-
-        cols = [
-            "Tenancy",
-            "Connect active users in current date range",
-            "Connect total users to date",
-            "Connect logins in current date range",
-            "Connect logins to date",
-            "Workbench active users in current date range",
-            "Workbench total users to date",
-            "Workbench logins in current date range",
-            "Workbench logins to date",
-        ]
-        for col in cols:
-            if col not in merged.columns:
-                merged[col] = 0
-        merged = merged[cols]
-        int_cols = [c for c in cols if c != "Tenancy"]
-        merged[int_cols] = merged[int_cols].astype(int)
+        connect = _tenancy_component_table("Connect").assign(Component="Connect")
+        workbench = _tenancy_component_table("Workbench").assign(Component="Workbench")
+        combined = pd.concat([connect, workbench], ignore_index=True, sort=False)
+        cols = ["Component"] + [c for c in connect.columns]
+        combined = combined[cols]
 
         def _writer():
-            return merged.to_csv(index=False)
+            return combined.to_csv(index=False)
         return _writer
 
 

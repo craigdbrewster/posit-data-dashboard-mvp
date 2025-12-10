@@ -544,6 +544,7 @@ app_ui = ui.page_fluid(
                         metric_card(
                             "Inactive users",
                             ui.output_text("users_inactive"),
+                            ui.output_text("users_inactive_change"),
                         ),
                     ),
                     ui.tags.div(
@@ -606,11 +607,15 @@ app_ui = ui.page_fluid(
                     ),
                     ui.tags.div(
                         {"class": "app-table-wrapper", "style": "margin-top:10px;"},
+                        ui.tags.div({"class": "app-panel__title", "style": "margin-bottom:6px;"}, "Connect"),
+                        ui.output_ui("tenancies_table_connect"),
+                        ui.tags.hr(),
+                        ui.tags.div({"class": "app-panel__title", "style": "margin:6px 0;"}, "Workbench"),
+                        ui.output_ui("tenancies_table_workbench"),
                         ui.tags.div(
-                            {"style": "text-align:right; margin-bottom:6px;"},
+                            {"style": "text-align:right; margin-top:10px;"},
                             ui.download_button("download_tenancies", "Download CSV", class_="btn btn-primary"),
                         ),
-                        ui.output_ui("tenancies_table_all"),
                     ),
                 ),
             ),
