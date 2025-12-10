@@ -173,20 +173,35 @@ def server(input, output, session):
         return usage_filtered()
 
     @reactive.Calc
+    def user_scope_all():
+        """Unique users in the filtered universe (ignores date range)."""
+        return set(usage_base()["user_id"].unique())
+
+    @reactive.Calc
+    def user_scope_current():
+        """Unique users with activity in the current period."""
+        return set(usage_filtered()["user_id"].unique())
+
+    @reactive.Calc
+    def user_scope_previous():
+        """Unique users with activity in the comparison period (same length as current)."""
+        start, end = comparison_period()
+        usage = usage_base()
+        usage = usage[(usage["login_time"] >= start) & (usage["login_time"] <= end)]
+        return set(usage["user_id"].unique())
+
+    @reactive.Calc
     def total_users_cumulative():
         """
         Total unique users from the (filtered) usage log, ignoring date range.
         This matches the total user list used for inactive counts.
         """
-        usage = usage_base()
-        return usage["user_id"].nunique()
+        return len(user_scope_all())
 
     @reactive.Calc
     def active_users_current():
         """Unique users with activity in the current period (respecting filters)."""
-        active = filtered_users()["userId"].nunique()
-        total = total_users_cumulative()
-        return min(active, total if total else active)
+        return len(user_scope_current())
 
     def first_seen_series():
         """First login per user for current tenancy/env/component filters."""
@@ -247,9 +262,7 @@ def server(input, output, session):
     @reactive.Calc
     def not_logged_in_current():
         """Users from the filtered population with no logins in the current period."""
-        total_scope = total_users_cumulative()
-        active = filtered_users()["userId"].nunique()
-        return max(total_scope - active, 0)
+        return max(len(user_scope_all() - user_scope_current()), 0)
 
     @reactive.Calc
     def sessions_per_user_current():
@@ -466,10 +479,10 @@ def server(input, output, session):
     @render.text
     def users_inactive_change():
         # Compare inactive users between current and previous date windows
-        total_scope = usage_base()["user_id"].nunique()
-        prev_active = len(filtered_users_prev_period())
+        total_scope = len(user_scope_all())
+        prev_active = len(user_scope_previous())
         prev_inactive = max(total_scope - prev_active, 0)
-        current = not_logged_in_current()
+        current = max(total_scope - len(user_scope_current()), 0)
         if prev_inactive == 0:
             change = 0.0 if current == 0 else 100.0
         else:
