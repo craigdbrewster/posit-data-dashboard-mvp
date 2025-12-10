@@ -24,6 +24,17 @@ usage_log = raw_log.rename(
 # Each record is a login event; derive logins by counting occurrences
 usage_log["logins"] = 1
 
+# Enforce single tenancy/product per user (most recent record wins)
+latest_attrs = (
+    usage_log.sort_values("login_time")
+    .groupby("user_id", as_index=False)
+    .tail(1)[["user_id", "tenancy", "environment"]]
+)
+tenancy_map = latest_attrs.set_index("user_id")["tenancy"]
+env_map = latest_attrs.set_index("user_id")["environment"]
+usage_log["tenancy"] = usage_log["user_id"].map(tenancy_map)
+usage_log["environment"] = usage_log["user_id"].map(env_map)
+
 # Defaults for date range based on usage log
 max_date = usage_log["login_time"].max().normalize()
 min_date = usage_log["login_time"].min().normalize()
