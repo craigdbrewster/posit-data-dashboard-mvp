@@ -82,6 +82,8 @@ app_ui = ui.page_fluid(
             }
             document.addEventListener('DOMContentLoaded', attachSortables);
             document.addEventListener('shiny:domupdate', attachSortables);
+            const observer = new MutationObserver(attachSortables);
+            observer.observe(document.body, { childList: true, subtree: true });
             """
         ),
         ui.tags.style(
