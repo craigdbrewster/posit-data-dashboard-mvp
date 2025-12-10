@@ -52,7 +52,14 @@ app_ui = ui.page_fluid(
                 const getCellValue = (row, idx) => {
                     const txt = row.children[idx].innerText.trim();
                     const num = parseFloat(txt.replace(/,/g, ''));
-                    return isNaN(num) ? txt.toLowerCase() : num;
+                    if (!Number.isNaN(num) && /^-?\\d+[\\d,\\.]*$/.test(txt)) {
+                        return num;
+                    }
+                    const time = Date.parse(txt);
+                    if (!Number.isNaN(time)) {
+                        return time;
+                    }
+                    return txt.toLowerCase();
                 };
                 const comparer = (idx, asc) => (a, b) => {
                     const v1 = getCellValue(asc ? a : b, idx);
@@ -220,16 +227,6 @@ app_ui = ui.page_fluid(
             }
             table {
                 width: 100%;
-            }
-            table.sortable th {
-                position: relative;
-                padding-right: 14px;
-            }
-            table.sortable th::after {
-                content: "⇅";
-                font-size: 11px;
-                opacity: 0.4;
-                margin-left: 4px;
             }
             table.sortable th.sort-asc::after {
                 content: " ▲";
