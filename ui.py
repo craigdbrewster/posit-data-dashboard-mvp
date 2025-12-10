@@ -4,15 +4,15 @@ import data
 
 
 def metric_card(title, value, change=None, aria_label=None):
-    """Lightweight GDS-inspired stat card used across tabs."""
+    """Lightweight stat card used across tabs."""
     parts = [
-        ui.tags.div({"class": "gds-card__label"}, title),
-        ui.tags.div({"class": "gds-card__value"}, value),
+        ui.tags.div({"class": "app-card__label"}, title),
+        ui.tags.div({"class": "app-card__value"}, value),
     ]
     if change is not None:
-        parts.append(ui.tags.div({"class": "gds-card__change"}, change))
+        parts.append(ui.tags.div({"class": "app-card__change"}, change))
     return ui.tags.div(
-        {"class": "gds-card", "role": "group", "aria-label": aria_label or title},
+        {"class": "app-card", "role": "group", "aria-label": aria_label or title},
         *parts,
     )
 
@@ -20,8 +20,8 @@ def metric_card(title, value, change=None, aria_label=None):
 def panel_card(title, body):
     """Panel wrapper matching the React mock styling."""
     return ui.tags.div(
-        {"class": "gds-panel"},
-        ui.tags.h2({"class": "gds-panel__title govuk-heading-m"}, title),
+        {"class": "app-panel"},
+        ui.tags.h2({"class": "app-panel__title"}, title),
         body,
     )
 
@@ -29,12 +29,6 @@ def panel_card(title, body):
 app_ui = ui.page_fluid(
     ui.tags.head(
         ui.tags.title("Posit Platform Analytics"),
-        ui.tags.link(
-            rel="stylesheet",
-                href="https://unpkg.com/govuk-frontend@4.7.0/dist/govuk/all.css",
-        ),
-        ui.tags.script(src="https://unpkg.com/govuk-frontend@4.7.0/dist/govuk/all.js"),
-        ui.tags.script("window.GOVUKFrontend && window.GOVUKFrontend.initAll();"),
         ui.tags.script("document.documentElement.setAttribute('lang','en');"),
         ui.tags.script(
             """
@@ -54,18 +48,17 @@ app_ui = ui.page_fluid(
         ui.tags.style(
             """
             :root {
-                --gds-ink: #0b0c0c;
-                --gds-muted: #505a5f;
-                --gds-border: #b1b4b6;
-                --gds-surface: #ffffff;
-                --gds-panel: #f3f2f1;
-                --gds-focus: #ffdd00;
-                --gds-accent: #1d70b8;
+                --ink: #0f172a;
+                --muted: #475467;
+                --border: #d0d5dd;
+                --surface: #ffffff;
+                --panel: #f5f7fb;
+                --accent: #2563eb;
             }
             body {
-                background: var(--gds-panel);
-                color: var(--gds-ink);
-                font-family: "GDS Transport", "Helvetica Neue", Arial, sans-serif;
+                background: var(--panel);
+                color: var(--ink);
+                font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
             }
             .zenith-app {
                 padding: 8px 0 40px;
@@ -81,11 +74,11 @@ app_ui = ui.page_fluid(
                 max-width: 900px;
                 margin: 0;
                 font-size: 17px;
-                color: var(--gds-muted);
+                color: var(--muted);
             }
-            .gds-filter-bar {
-                background: var(--gds-surface);
-                border: 1px solid var(--gds-border);
+            .app-filter-bar {
+                background: var(--surface);
+                border: 1px solid var(--border);
                 border-radius: 8px;
                 padding: 16px 18px;
                 margin: 20px 0;
@@ -93,95 +86,95 @@ app_ui = ui.page_fluid(
                 grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
                 gap: 12px 18px;
             }
-            .gds-filter-bar label.form-label {
+            .app-filter-bar label.form-label {
                 font-weight: 700;
                 font-size: 16px;
                 margin-bottom: 6px;
             }
-            .gds-filter-bar .form-select,
-            .gds-filter-bar input[type="text"],
-            .gds-filter-bar input[type="date"] {
-                border: 1px solid var(--gds-border);
+            .app-filter-bar .form-select,
+            .app-filter-bar input[type="text"],
+            .app-filter-bar input[type="date"] {
+                border: 1px solid var(--border);
                 border-radius: 4px;
                 min-height: 44px;
                 font-size: 16px;
             }
-            .gds-tabs .nav-tabs {
+            .app-tabs .nav-tabs {
                 border: none;
                 gap: 8px;
                 margin-bottom: 0;
             }
-            .gds-tabs .nav-tabs .nav-link {
-                border: 1px solid var(--gds-border);
+            .app-tabs .nav-tabs .nav-link {
+                border: 1px solid var(--border);
                 border-bottom: 0;
                 background: #e7e8e8;
-                color: var(--gds-ink);
+                color: var(--ink);
                 border-radius: 6px 6px 0 0;
                 font-weight: 600;
                 padding: 10px 14px;
             }
-            .gds-tabs .nav-tabs .nav-link.active {
-                background: var(--gds-surface);
-                border-color: var(--gds-border);
+            .app-tabs .nav-tabs .nav-link.active {
+                background: var(--surface);
+                border-color: var(--border);
                 border-bottom: 0;
             }
-            .gds-tabs .tab-content {
-                border: 1px solid var(--gds-border);
-                background: var(--gds-surface);
+            .app-tabs .tab-content {
+                border: 1px solid var(--border);
+                background: var(--surface);
                 padding: 18px;
                 border-radius: 0 8px 8px 8px;
             }
-            .gds-card-grid {
+            .app-card-grid {
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
                 gap: 14px;
                 margin-bottom: 16px;
             }
-            .gds-card {
-                background: var(--gds-surface);
-                border: 1px solid var(--gds-border);
+            .app-card {
+                background: var(--surface);
+                border: 1px solid var(--border);
                 border-radius: 8px;
                 padding: 14px 16px;
                 box-shadow: 0 1px 0 rgba(0,0,0,0.03);
             }
-            .gds-card__label {
+            .app-card__label {
                 font-size: 15px;
-                color: var(--gds-muted);
+                color: var(--muted);
                 margin-bottom: 4px;
             }
-            .gds-card__value {
+            .app-card__value {
                 font-size: 32px;
                 font-weight: 700;
                 line-height: 1.1;
             }
-            .gds-card__change {
-                color: var(--gds-muted);
+            .app-card__change {
+                color: var(--muted);
                 font-size: 14px;
                 margin-top: 2px;
             }
-            .gds-panel-grid {
+            .app-panel-grid {
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
                 gap: 14px;
             }
-            .gds-panel {
-                background: var(--gds-surface);
-                border: 1px solid var(--gds-border);
+            .app-panel {
+                background: var(--surface);
+                border: 1px solid var(--border);
                 border-radius: 8px;
                 padding: 12px 14px 10px;
                 box-shadow: 0 2px 0 rgba(0,0,0,0.03);
             }
-            .gds-panel__title {
+            .app-panel__title {
                 font-weight: 700;
                 margin: 0 0 6px;
                 font-size: 18px;
             }
-            .gds-table-wrapper {
+            .app-table-wrapper {
                 margin-top: 14px;
-                border: 1px solid var(--gds-border);
+                border: 1px solid var(--border);
                 border-radius: 8px;
                 overflow: hidden;
-                background: var(--gds-surface);
+                background: var(--surface);
                 padding: 8px;
             }
             table {
@@ -190,7 +183,7 @@ app_ui = ui.page_fluid(
             .shiny-data-grid table {
                 font-size: 14px;
             }
-            .gds-table-wrapper table {
+            .app-table-wrapper table {
                 width: 100% !important;
             }
             .dataTables_wrapper .dataTable {
@@ -217,22 +210,22 @@ app_ui = ui.page_fluid(
                 margin-left: 4px;
                 color: #505a5f;
             }
-            .gds-secondary {
-                color: var(--gds-muted);
+            .app-muted {
+                color: var(--muted);
                 font-size: 15px;
             }
-            .gds-progress {
+            .app-progress {
                 background: #efefef;
                 border-radius: 999px;
                 height: 10px;
                 overflow: hidden;
                 width: 100%;
             }
-            .gds-progress__bar {
+            .app-progress__bar {
                 height: 100%;
                 border-radius: 999px;
             }
-            .gds-pill {
+            .app-pill {
                 background: #f3f2f1;
                 border-radius: 8px;
                 padding: 12px 14px;
@@ -243,13 +236,13 @@ app_ui = ui.page_fluid(
                 margin-bottom: 10px;
                 border: 1px solid #dcdcdc;
             }
-            .gds-pill__label {
+            .app-pill__label {
                 display: flex;
                 align-items: center;
                 gap: 8px;
                 font-weight: 600;
             }
-            .gds-pill__icon {
+            .app-pill__icon {
                 width: 24px;
                 height: 24px;
                 border-radius: 12px;
@@ -260,49 +253,49 @@ app_ui = ui.page_fluid(
                 justify-content: center;
                 font-size: 14px;
             }
-            .gds-pill__metrics {
+            .app-pill__metrics {
                 display: flex;
                 flex-direction: column;
                 align-items: flex-end;
                 gap: 2px;
             }
-            .gds-pill__value-lg {
+            .app-pill__value-lg {
                 font-size: 24px;
                 font-weight: 700;
                 line-height: 1.1;
             }
-            .gds-pill__sub {
-                color: var(--gds-muted);
+            .app-pill__sub {
+                color: var(--muted);
                 font-size: 14px;
             }
-            .gds-pill__change {
+            .app-pill__change {
                 color: #0b7a0b;
                 font-weight: 600;
                 font-size: 14px;
             }
-            .gds-dist-row {
+            .app-dist-row {
                 display: grid;
                 grid-template-columns: 1fr auto;
                 align-items: center;
                 gap: 16px;
                 margin-bottom: 6px;
             }
-            .gds-dist-label {
+            .app-dist-label {
                 font-weight: 600;
             }
-            .gds-dist-val {
-                color: var(--gds-muted);
+            .app-dist-val {
+                color: var(--muted);
                 font-weight: 600;
             }
             /* Force DataTables to fill wrappers */
-            .gds-table-wrapper .dataTables_wrapper,
-            .gds-table-wrapper .dataTables_scroll,
-            .gds-table-wrapper .dataTables_scrollHead,
-            .gds-table-wrapper .dataTables_scrollBody,
-            .gds-table-wrapper table.dataTable {
+            .app-table-wrapper .dataTables_wrapper,
+            .app-table-wrapper .dataTables_scroll,
+            .app-table-wrapper .dataTables_scrollHead,
+            .app-table-wrapper .dataTables_scrollBody,
+            .app-table-wrapper table.dataTable {
                 width: 100% !important;
             }
-            .gds-table-wrapper table.dataTable {
+            .app-table-wrapper table.dataTable {
                 margin: 0 !important;
             }
             .users-top-row {
@@ -317,7 +310,7 @@ app_ui = ui.page_fluid(
                 gap: 10px;
                 height: 100%;
             }
-            .users-metric-stack .gds-card {
+            .users-metric-stack .app-card {
                 height: 100%;
             }
             .usage-frequency-panel {
@@ -353,8 +346,8 @@ app_ui = ui.page_fluid(
                 gap: 16px;
             }
             .shared-tab-panel {
-                border: 1px solid var(--gds-border);
-                background: var(--gds-surface);
+                border: 1px solid var(--border);
+                background: var(--surface);
                 padding: 18px;
                 border-radius: 0 0 8px 8px;
                 margin-top: -1px;
@@ -380,14 +373,14 @@ app_ui = ui.page_fluid(
             }
             .filter-card {
                 height: 100%;
-                border: 1px solid var(--gds-border);
+                border: 1px solid var(--border);
                 border-radius: 8px;
-                background: var(--gds-surface);
+                background: var(--surface);
                 padding: 12px 14px;
                 display: flex;
                 align-items: center;
             }
-            .filter-card .gds-filter-bar {
+            .filter-card .app-filter-bar {
                 border: none;
                 padding: 0;
                 margin: 0;
@@ -420,26 +413,26 @@ app_ui = ui.page_fluid(
             }
             .beta-banner__text {
                 margin: 0;
-                color: var(--gds-muted);
+                color: var(--muted);
             }
             .beta-banner__action {
                 margin-left: auto;
             }
             /* Keep Plotly charts contained within panels */
-            .gds-panel .plotly-graph-div {
+            .app-panel .plotly-graph-div {
                 width: 100% !important;
                 max-width: 100%;
                 overflow: hidden;
             }
-            .gds-panel .plot-container {
+            .app-panel .plot-container {
                 width: 100% !important;
                 max-width: 100%;
                 overflow: hidden;
             }
-            .gds-panel {
+            .app-panel {
                 overflow: hidden;
             }
-            .gds-tabs .tab-content {
+            .app-tabs .tab-content {
                 display: block;
                 padding: 0;
                 border: none;
@@ -449,7 +442,7 @@ app_ui = ui.page_fluid(
         ),
     ),
     ui.tags.main(
-        {"class": "govuk-width-container zenith-app", "role": "main"},
+        {"class": "zenith-app", "role": "main"},
         ui.tags.div(
             {"class": "beta-banner", "role": "status", "aria-label": "Beta notice"},
             ui.tags.div(
@@ -470,15 +463,15 @@ app_ui = ui.page_fluid(
             {"class": "hero-bar"},
             ui.tags.header(
                 {"class": "zenith-hero"},
-                ui.tags.h1("Posit Usage Data Dashboard", class_="govuk-heading-l"),
+                ui.tags.h1("Posit Usage Data Dashboard"),
                 ui.tags.p(
                     "Enabling more people to use Posit, Python and R more often.",
-                    class_="gds-secondary",
+                    class_="app-muted",
                 ),
             ),
         ),
         ui.tags.div(
-            {"class": "gds-tabs"},
+            {"class": "app-tabs"},
             ui.navset_tab(
                 ui.nav_panel(
                     "Connect",
@@ -502,14 +495,14 @@ app_ui = ui.page_fluid(
                     ui.tags.div(
                         {"class": "licence-filter-row"},
                         ui.tags.div(
-                            {"class": "gds-card licence-card"},
-                            ui.tags.div({"class": "gds-card__label"}, "Licences available"),
-                            ui.tags.div({"class": "gds-card__value"}, ui.output_text("licences_available")),
+                            {"class": "app-card licence-card"},
+                            ui.tags.div({"class": "app-card__label"}, "Licences available"),
+                            ui.tags.div({"class": "app-card__value"}, ui.output_text("licences_available")),
                         ),
                         ui.tags.div(
                             {"class": "filter-card"},
                             ui.tags.div(
-                                {"class": "gds-filter-bar"},
+                                {"class": "app-filter-bar"},
                                 ui.input_date_range(
                                     "dates",
                                     "Date range",
@@ -537,7 +530,7 @@ app_ui = ui.page_fluid(
                         ),
                     ),
                     ui.tags.div(
-                        {"class": "gds-card-grid", "style": "margin-top:10px;"},
+                        {"class": "app-card-grid", "style": "margin-top:10px;"},
                         metric_card(
                             "Total users",
                             ui.output_text("users_total"),
@@ -555,20 +548,19 @@ app_ui = ui.page_fluid(
                         ),
                     ),
                     ui.tags.div(
-                        {"class": "gds-panel-grid", "style": "margin-top:10px;"},
+                        {"class": "app-panel-grid", "style": "margin-top:10px"},
                         panel_card("Avg logins per week", ui.output_ui("users_logins_pie")),
-                        panel_card("Avg hours per week", ui.output_ui("users_hours_pie")),
                     ),
                     ui.tags.div(
-                        {"class": "gds-panel-grid", "style": "margin-top:10px"},
+                        {"class": "app-panel-grid", "style": "margin-top:10px"},
                         panel_card("Total and active users per week", ui.output_ui("users_trend")),
                     ),
                     ui.tags.div(
-                        {"class": "gds-panel-grid", "style": "margin-top:10px"},
-                        panel_card("Total logins and hours per week ", ui.output_ui("users_frequency")),
+                        {"class": "app-panel-grid", "style": "margin-top:10px"},
+                        panel_card("Logins per week", ui.output_ui("users_frequency")),
                     ),
                     ui.tags.div(
-                        {"class": "gds-table-wrapper"},
+                        {"class": "app-table-wrapper"},
                         ui.tags.div(
                             {"class": "download-bar", "style": "margin:0 0 8px 0;"},
                             ui.input_text("pid_search", "Search by PID", placeholder="Enter a PID"),
@@ -585,7 +577,7 @@ app_ui = ui.page_fluid(
                     ui.tags.div(
                         {"class": "filter-card"},
                         ui.tags.div(
-                            {"class": "gds-filter-bar"},
+                            {"class": "app-filter-bar"},
                             ui.input_date_range(
                                 "tenancy_dates",
                                 "Date range",
@@ -605,17 +597,16 @@ app_ui = ui.page_fluid(
                         ),
                     ),
                     ui.tags.div(
-                        {"class": "gds-panel-grid", "style": "margin-bottom:12px"},
+                        {"class": "app-panel-grid", "style": "margin-bottom:12px; grid-template-columns: 1fr;"},
                         panel_card("Total users", ui.output_ui("tenancy_licence_bars")),
-                        panel_card("Active users", ui.output_ui("tenancy_active_bars")),
+                        panel_card("Active users (current range)", ui.output_ui("tenancy_active_bars")),
                     ),
                     ui.tags.div(
-                        {"class": "gds-panel-grid", "style": "margin-bottom:12px"},
-                        panel_card("Total logins", ui.output_ui("tenancy_logins_bars")),
-                        panel_card("Total hours", ui.output_ui("tenancy_hours_bars")),
+                        {"class": "app-panel-grid", "style": "margin-bottom:12px; grid-template-columns: 1fr;"},
+                        panel_card("Logins (current range)", ui.output_ui("tenancy_logins_bars")),
                     ),
                     ui.tags.div(
-                        {"class": "gds-table-wrapper", "style": "margin-top:10px;"},
+                        {"class": "app-table-wrapper", "style": "margin-top:10px;"},
                         ui.tags.div(
                             {"style": "text-align:right; margin-bottom:6px;"},
                             ui.download_button("download_tenancies", "Download CSV", class_="btn btn-primary"),

@@ -9,7 +9,6 @@ TOTAL_USERS = 10500
 TOTAL_CONNECT_LICENCES = 10000
 TOTAL_WORKBENCH_LICENCES = 5000
 NEW_USERS = 50  # static for MVP
-SESSION_HOURS_PER_SESSION = 1.5
 
 USAGE_LOG_PATH = os.path.join(DATA_DIR, "usage_log.csv")
 
@@ -51,7 +50,6 @@ users = (
     .agg(
         lastLogin=("login_time", "max"),
         loginCount=("logins", "sum"),
-        totalHours=("session_length_hours", "sum"),
     )
     .rename(columns={"user_id": "userId"})
 )
@@ -62,7 +60,6 @@ tenancies = (
     .agg(
         activeUsers=("user_id", "nunique"),
         totalLogins=("logins", "sum"),
-        sessionHours=("session_length_hours", "sum"),
     )
 )
 tenancies["growth"] = 0.0  # placeholder
@@ -89,6 +86,6 @@ timeseries = (
         activeUsers=("user_id", "nunique"),
         regularUsers=("user_id", "nunique"),
         powerUsers=("user_id", "nunique"),
-        sessionHours=("session_length_hours", "sum"),
+        totalLogins=("logins", "sum"),
     )
 )
