@@ -110,7 +110,13 @@ def server(input, output, session):
             usage.sort_values("last_seen")
             .groupby("user_name", as_index=False)
             .tail(1)
-            .rename(columns={"user_name": "userId", "last_seen": "lastLogin"})
+            .rename(
+                columns={
+                    "user_name": "userId",
+                    "last_seen": "lastLogin",
+                    "product": "environment",
+                }
+            )
         )
         merged = (
             latest[["userId", "tenancy", "component", "environment", "lastLogin"]]
