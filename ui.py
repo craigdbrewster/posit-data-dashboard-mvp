@@ -63,9 +63,15 @@ app_ui = ui.page_fluid(
                 table.querySelectorAll('th').forEach((th, idx) => {
                     th.style.cursor = 'pointer';
                     th.addEventListener('click', () => {
+                        // reset indicators
+                        table.querySelectorAll('th').forEach(header => {
+                            header.classList.remove('sort-asc', 'sort-desc');
+                        });
                         const tbody = table.tBodies[0];
+                        const asc = th.asc = !th.asc;
+                        th.classList.add(asc ? 'sort-asc' : 'sort-desc');
                         Array.from(tbody.querySelectorAll('tr'))
-                            .sort(comparer(idx, (th.asc = !th.asc)))
+                            .sort(comparer(idx, asc))
                             .forEach(tr => tbody.appendChild(tr));
                     });
                 });
@@ -212,6 +218,14 @@ app_ui = ui.page_fluid(
             }
             table {
                 width: 100%;
+            }
+            table.sortable th.sort-asc::after {
+                content: " ▲";
+                font-size: 12px;
+            }
+            table.sortable th.sort-desc::after {
+                content: " ▼";
+                font-size: 12px;
             }
             .shiny-data-grid table {
                 font-size: 14px;

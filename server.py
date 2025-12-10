@@ -93,18 +93,18 @@ def server(input, output, session):
                     "loginCount",
                 ]
             )
+        # First login map from all time (respecting current tenancy/env/component filters)
+        usage_all = usage_base()
+        first_map = (
+            usage_all.groupby("user_id")["login_time"].min()
+            if not usage_all.empty
+            else pd.Series(dtype="datetime64[ns]")
+        )
         # Sum logins per user in the window
         sums = (
             usage.groupby("user_id", as_index=False)["logins"]
             .sum()
             .rename(columns={"user_id": "userId", "logins": "loginCount"})
-        )
-        # First login per user
-        first = (
-            usage.sort_values("login_time")
-            .groupby("user_id", as_index=False)
-            .head(1)
-            .rename(columns={"user_id": "userId", "login_time": "firstLogin"})
         )
         # Latest login per user with associated tenancy/component/env
         latest = (
@@ -116,8 +116,8 @@ def server(input, output, session):
         merged = (
             latest[["userId", "tenancy", "component", "environment", "lastLogin"]]
             .merge(sums, on="userId", how="left")
-            .merge(first[["userId", "firstLogin"]], on="userId", how="left")
         )
+        merged["firstLogin"] = merged["userId"].map(first_map)
         return merged
 
     @reactive.Calc
@@ -786,6 +786,7 @@ def server(input, output, session):
             }
         )
         out["Total logins\n(to date)"] = out["PID"].map(total_logins_map).fillna(0).astype(int)
+        # First login should reflect first-ever login for the filtered population
         out["First login"] = fmt_date(out["First login"])
         out["Last login"] = fmt_date(out["Last login"])
         out["Avg logins\n(per week)"] = (out["Total logins\n(date range)"] / weeks).round(1)
