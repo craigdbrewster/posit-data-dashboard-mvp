@@ -624,6 +624,11 @@ def server(input, output, session):
             usage.groupby("user_id")["session_length_hours"].sum() / weeks
         )
         hours_per_week = user_hours.reindex(user_hours.index, fill_value=0)
+        inactive = max(not_logged_in_current(), 0)
+        if inactive:
+            hours_per_week = pd.concat(
+                [hours_per_week, pd.Series([0] * inactive)], ignore_index=True
+            )
         labels, counts, colors = _pie_from_series(
             hours_per_week,
             [
@@ -661,6 +666,11 @@ def server(input, output, session):
 
         user_logins = usage.groupby("user_id")["logins"].sum() / weeks
         logins_per_week = user_logins.reindex(user_logins.index, fill_value=0)
+        inactive = max(not_logged_in_current(), 0)
+        if inactive:
+            logins_per_week = pd.concat(
+                [logins_per_week, pd.Series([0] * inactive)], ignore_index=True
+            )
         labels, counts, colors = _pie_from_series(
             logins_per_week,
             [
@@ -779,6 +789,7 @@ def server(input, output, session):
         start, end = current_period()
         days = max((end - start).days + 1, 1)
         weeks = max(days / 7, 1)
+        include_component = user_component() in (None, "All Components")
 
         def fmt_hours(hours_float: float) -> str:
             minutes = int(round(hours_float * 60))
@@ -786,46 +797,73 @@ def server(input, output, session):
             dd, hh = divmod(hh, 24)
             return f"{dd:02d}:{hh:02d}:{mm:02d}"
 
+        def fmt_last_login(series: pd.Series) -> pd.Series:
+            """Return series of date-only strings from datetime-like values."""
+            formatted = pd.to_datetime(series, errors="coerce").dt.date.astype(str)
+            return formatted.replace("NaT", "")
+
         if df.empty:
+            cols = [
+                "PID",
+                "Tenancy",
+                "Environment",
+                "Last login",
+                "Avg logins per week",
+                "Avg hours per week",
+                "Total logins",
+                "Total hours",
+            ]
+            if include_component:
+                cols.insert(2, "Component")
             empty_df = pd.DataFrame(
-                columns=[
-                    "PID",
-                    "Tenancy",
-                    "Component",
-                    "Environment",
-                    "Last login",
-                    "Avg sessions per week",
-                    "Avg hours per week",
-                    "Total sessions",
-                    "Total hours",
-                ]
+                columns=cols
             )
             return ui.HTML(empty_df.to_html(index=False, classes="full-table", border=0))
 
         df = df.sort_values("lastLogin", ascending=False)
-        out = df[
-            ["userId", "tenancy", "component", "environment", "lastLogin", "loginCount"]
-        ].copy()
+        base_cols = ["userId", "tenancy", "environment", "lastLogin", "loginCount"]
+        if include_component:
+            base_cols.insert(2, "component")
+        out = df[base_cols].copy()
         out = out.rename(
             columns={
                 "userId": "PID",
                 "tenancy": "Tenancy",
-                "component": "Component",
                 "environment": "Environment",
                 "lastLogin": "Last login",
                 "loginCount": "Total logins",
             }
         )
+        out["Last login"] = fmt_last_login(out["Last login"])
         out["Total hours"] = out["Total logins"] * SESSION_HOURS_PER_SESSION
         out["Avg logins per week"] = (out["Total logins"] / weeks).round(0).astype(int)
         out["Avg hours per week"] = out["Total hours"] / weeks
         out["Avg hours per week"] = out["Avg hours per week"].apply(fmt_hours)
         out["Total hours"] = out["Total hours"].apply(fmt_hours)
-        out = out[
-            [
+        final_cols = [
+            "PID",
+            "Tenancy",
+            "Environment",
+            "Last login",
+            "Avg logins per week",
+            "Total logins",
+            "Avg hours per week",
+            "Total hours",
+        ]
+        if include_component:
+            final_cols.insert(2, "Component")
+        out = out[final_cols]
+        return ui.HTML(out.to_html(index=False, classes="full-table", border=0))
+
+    @output
+    @render.download(filename="users.csv")
+    def download_users():
+        df = filtered_users_by_pid().copy()
+        include_component = user_component() in (None, "All Components")
+        if df.empty:
+            cols = [
                 "PID",
                 "Tenancy",
-                "Component",
                 "Environment",
                 "Last login",
                 "Avg logins per week",
@@ -833,27 +871,9 @@ def server(input, output, session):
                 "Avg hours per week",
                 "Total hours",
             ]
-        ]
-        return ui.HTML(out.to_html(index=False, classes="full-table", border=0))
-
-    @output
-    @render.download(filename="users.csv")
-    def download_users():
-        df = filtered_users_by_pid().copy()
-        if df.empty:
-            df = pd.DataFrame(
-                columns=[
-                    "PID",
-                    "Tenancy",
-                    "Component",
-                    "Environment",
-                    "Last login",
-                    "Avg logins per week",
-                    "Total logins",
-                    "Avg hours per week",
-                    "Total hours",
-                ]
-            )
+            if include_component:
+                cols.insert(2, "Component")
+            df = pd.DataFrame(columns=cols)
         else:
             start, end = current_period()
             days = max((end - start).days + 1, 1)
@@ -865,38 +885,44 @@ def server(input, output, session):
                 dd, hh = divmod(hh, 24)
                 return f"{dd:02d}:{hh:02d}:{mm:02d}"
 
+            def fmt_last_login(series: pd.Series) -> pd.Series:
+                formatted = pd.to_datetime(series, errors="coerce").dt.date.astype(str)
+                return formatted.replace("NaT", "")
+
             df = df.sort_values("lastLogin", ascending=False)
-            df = df[
-                ["userId", "tenancy", "component", "environment", "lastLogin", "loginCount"]
-            ].copy()
-            df = df.rename(
-                columns={
-                    "userId": "PID",
-                    "tenancy": "Tenancy",
-                    "component": "Component",
-                    "environment": "Environment",
-                    "lastLogin": "Last login",
-                    "loginCount": "Total logins",
-                }
-            )
+            base_cols = ["userId", "tenancy", "environment", "lastLogin", "loginCount"]
+            if include_component:
+                base_cols.insert(2, "component")
+            df = df[base_cols].copy()
+            rename_map = {
+                "userId": "PID",
+                "tenancy": "Tenancy",
+                "environment": "Environment",
+                "lastLogin": "Last login",
+                "loginCount": "Total logins",
+            }
+            if include_component:
+                rename_map["component"] = "Component"
+            df = df.rename(columns=rename_map)
+            df["Last login"] = fmt_last_login(df["Last login"])
             df["Total hours"] = df["Total logins"] * SESSION_HOURS_PER_SESSION
             df["Avg logins per week"] = (df["Total logins"] / weeks).round(0).astype(int)
             df["Avg hours per week"] = df["Total hours"] / weeks
             df["Avg hours per week"] = df["Avg hours per week"].apply(fmt_hours)
             df["Total hours"] = df["Total hours"].apply(fmt_hours)
-            df = df[
-                [
-                    "PID",
-                    "Tenancy",
-                    "Component",
-                    "Environment",
-                    "Last login",
-                    "Avg logins per week",
-                    "Total logins",
-                    "Avg hours per week",
-                    "Total hours",
-                ]
+            final_cols = [
+                "PID",
+                "Tenancy",
+                "Environment",
+                "Last login",
+                "Avg logins per week",
+                "Total logins",
+                "Avg hours per week",
+                "Total hours",
             ]
+            if include_component:
+                final_cols.insert(2, "Component")
+            df = df[final_cols]
 
         def _writer():
             return df.to_csv(index=False)
