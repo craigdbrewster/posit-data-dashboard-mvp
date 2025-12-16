@@ -86,14 +86,20 @@ def server(input, output, session):
                     "userId",
                     "tenancy",
                     "component",
-                    "environment",
                     "firstLogin",
                     "lastLogin",
                     "loginCount",
                 ]
             )
-        # First login map from all time (respecting current tenancy/env/component filters)
+        # First login map from all time (respecting current tenancy/component filters)
         usage_all = usage_base()
+        # Tenancies per user should always reflect full history, not current filter
+        tenancy_map_all = (
+            data.usage_log.groupby("user_name")["tenancy"]
+            .apply(lambda s: sorted(set(s.dropna())))
+            if not data.usage_log.empty
+            else pd.Series(dtype="object")
+        )
         first_map = (
             usage_all.groupby("user_name")["last_seen"].min()
             if not usage_all.empty
@@ -105,7 +111,7 @@ def server(input, output, session):
             .sum()
             .rename(columns={"user_name": "userId", "logins": "loginCount"})
         )
-        # Latest login per user with associated tenancy/component/env
+        # Latest login per user with associated tenancy/component
         latest = (
             usage.sort_values("last_seen")
             .groupby("user_name", as_index=False)
@@ -114,15 +120,20 @@ def server(input, output, session):
                 columns={
                     "user_name": "userId",
                     "last_seen": "lastLogin",
-                    "product": "environment",
                 }
             )
         )
         merged = (
-            latest[["userId", "tenancy", "component", "environment", "lastLogin"]]
+            latest[["userId", "tenancy", "component", "lastLogin"]]
             .merge(sums, on="userId", how="left")
         )
         merged["firstLogin"] = merged["userId"].map(first_map)
+        # Surface all tenancies for a user (comma-separated) for display
+        merged["tenancy"] = merged["userId"].map(
+            lambda uid: ", ".join(tenancy_map_all.get(uid, []))
+            if isinstance(tenancy_map_all.get(uid, []), list)
+            else ""
+        )
         return merged
 
     @reactive.Calc
@@ -166,21 +177,17 @@ def server(input, output, session):
 
     def usage_base(
         tenancy_val=None,
-        env_val=None,
         comp_val=None,
     ):
         """
-        Apply tenancy/environment/component filters to the unified log.
+        Apply tenancy/component filters to the unified log.
         Defaults pull from current inputs when not provided.
         """
         usage = data.usage_log.copy()
         tenancy_val = tenancy_val if tenancy_val is not None else input.tenancy()
-        env_val = env_val if env_val is not None else input.environment()
         comp_val = comp_val if comp_val is not None else user_component()
         if tenancy_val != "All Tenancies":
             usage = usage[usage["tenancy"] == tenancy_val]
-        if env_val != "All Environments":
-            usage = usage[usage["product"] == env_val]
         if comp_val and comp_val != "All Components":
             usage = usage[usage["component"] == comp_val]
         return usage
@@ -235,7 +242,7 @@ def server(input, output, session):
         return len(user_scope_current())
 
     def first_seen_series():
-        """First login per user for current tenancy/env/component filters."""
+        """First login per user for current tenancy/component filters."""
         usage = usage_base()
         if usage.empty:
             return pd.Series(dtype="datetime64[ns]")
@@ -243,9 +250,8 @@ def server(input, output, session):
 
     @reactive.Calc
     def tenancy_usage_base():
-        """Base usage for Tenancies tab using its environment selector."""
-        env_val = input.tenancy_environment()
-        return usage_base(env_val=env_val, tenancy_val="All Tenancies", comp_val=None)
+        """Base usage for Tenancies tab."""
+        return usage_base(tenancy_val="All Tenancies", comp_val=None)
 
     @reactive.Calc
     def tenancy_usage():
@@ -764,8 +770,7 @@ def server(input, output, session):
         if df.empty:
             cols = [
                 "PID",
-                "Tenancy",
-                "Environment",
+                "Tenancies",
                 "First login",
                 "Last login",
                 "Total logins\n(date range)",
@@ -778,13 +783,12 @@ def server(input, output, session):
             return ui.HTML(empty_df.to_html(index=False, classes="full-table sortable", border=0))
 
         df = df.sort_values("lastLogin", ascending=False)
-        base_cols = ["userId", "tenancy", "environment", "firstLogin", "lastLogin", "loginCount"]
+        base_cols = ["userId", "tenancy", "firstLogin", "lastLogin", "loginCount"]
         out = df[base_cols].copy()
         out = out.rename(
             columns={
                 "userId": "PID",
-                "tenancy": "Tenancy",
-                "environment": "Environment",
+                "tenancy": "Tenancies",
                 "firstLogin": "First login",
                 "lastLogin": "Last login",
                 "loginCount": "Total logins\n(date range)",
@@ -797,8 +801,7 @@ def server(input, output, session):
         out["Avg logins\n(per week)"] = (out["Total logins\n(date range)"] / weeks).round(1)
         final_cols = [
             "PID",
-            "Tenancy",
-            "Environment",
+            "Tenancies",
             "First login",
             "Last login",
             "Total logins\n(date range)",
@@ -819,8 +822,7 @@ def server(input, output, session):
         if df.empty:
             cols = [
                 "PID",
-                "Tenancy",
-                "Environment",
+                "Tenancies",
                 "First login",
                 "Last login",
                 "Total logins\n(date range)",
@@ -838,12 +840,11 @@ def server(input, output, session):
                 return formatted.replace("NaT", "")
 
             df = df.sort_values("lastLogin", ascending=False)
-            base_cols = ["userId", "tenancy", "environment", "firstLogin", "lastLogin", "loginCount"]
+            base_cols = ["userId", "tenancy", "firstLogin", "lastLogin", "loginCount"]
             df = df[base_cols].copy()
             rename_map = {
                 "userId": "PID",
-                "tenancy": "Tenancy",
-                "environment": "Environment",
+                "tenancy": "Tenancies",
                 "firstLogin": "First login",
                 "lastLogin": "Last login",
                 "loginCount": "Total logins\n(date range)",
@@ -855,8 +856,7 @@ def server(input, output, session):
             df["Avg logins\n(per week)"] = (df["Total logins\n(date range)"] / weeks).round(1)
             final_cols = [
                 "PID",
-                "Tenancy",
-                "Environment",
+                "Tenancies",
                 "First login",
                 "Last login",
                 "Total logins\n(date range)",

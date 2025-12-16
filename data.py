@@ -3,7 +3,7 @@ import os
 
 import pandas as pd
 
-DATA_DIR = "data"
+DATA_DIR = "./data/"
 
 TOTAL_USERS = 10500
 TOTAL_CONNECT_LICENCES = 10000
@@ -19,10 +19,10 @@ usage_log["logins"] = 1
 # Dynamic total users derived from the data (unique user_name)
 TOTAL_USERS = usage_log["user_name"].nunique()
 
-# Validate single tenancy/product per user to fail fast on bad inputs
-_counts = usage_log.groupby("user_name").agg(tenancies=("tenancy", "nunique"), products=("product", "nunique"))
-if (_counts["tenancies"] > 1).any() or (_counts["products"] > 1).any():
-    raise ValueError("Each user_name must map to exactly one tenancy and one product in usage_log.json")
+# Validate single product per user to fail fast on bad inputs
+_counts = usage_log.groupby("user_name").agg(products=("product", "nunique"))
+if (_counts["products"] > 1).any():
+    raise ValueError("Each user_name must map to exactly one product in usage_log.json")
 
 # Defaults for date range based on usage log
 max_date = usage_log["last_seen"].max().normalize()
@@ -36,30 +36,9 @@ def tenancy_choices():
     return ["All Tenancies"] + all_vals
 
 
-def environment_choices():
-    base = ["Production", "Development", "Staging"]
-    data_vals = sorted(usage_log["product"].unique())
-    merged = []
-    for val in base + list(data_vals):
-        if val not in merged:
-            merged.append(val)
-    return ["All Environments"] + merged
-
-
 def component_choices():
     data_vals = sorted(usage_log["component"].unique())
     return ["All Components"] + list(data_vals)
-
-
-# Derived users summary (per user)
-users = (
-    usage_log.groupby(["user_name", "tenancy", "component", "product"], as_index=False)
-    .agg(
-        lastLogin=("last_seen", "max"),
-        loginCount=("logins", "sum"),
-    )
-    .rename(columns={"user_name": "userId", "product": "environment"})
-)
 
 # Derived tenancies summary
 tenancies = (

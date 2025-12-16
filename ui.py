@@ -2,7 +2,6 @@ from shiny import ui
 
 import data
 
-
 def metric_card(title, value, change=None, aria_label=None):
     """Lightweight stat card used across tabs."""
     parts = [
@@ -506,13 +505,15 @@ app_ui = ui.page_fluid(
             ui.tags.div(
                 ui.tags.p("Beta", class_="beta-banner__title"),
                 ui.tags.p(
-                    "This is a beta version of the data dashboard. Please let us know if you have any comments or suggestions",
+                    "This is a beta version application. Please let us know if you have any comments or suggestions",
                     class_="beta-banner__text",
                 ),
             ),
             ui.tags.a(
                 "Feedback",
-                href="#",
+                href="https://forms.office.com/e/hVV9jZpfhp",
+                target="_blank",
+                rel="noreferrer noopener",
                 class_="btn btn-primary beta-banner__action",
                 role="button",
             ),
@@ -521,7 +522,7 @@ app_ui = ui.page_fluid(
             {"class": "hero-bar"},
             ui.tags.header(
                 {"class": "zenith-hero"},
-                ui.tags.h1("Posit Usage Data Dashboard"),
+                ui.tags.h1("Posit Platform Analytics"),
                 ui.tags.p(
                     "Enabling more people to use Posit, Python and R more often.",
                     class_="app-muted",
@@ -572,20 +573,13 @@ app_ui = ui.page_fluid(
                                     selected="All Tenancies",
                                     width="100%",
                                 ),
-                                ui.input_select(
-                                    "environment",
-                                    "Environment",
-                                    choices=data.environment_choices(),
-                                    selected="All Environments",
-                                    width="100%",
-                                ),
                             ),
                         ),
                     ),
                     ui.tags.div(
                         {"class": "app-card-grid", "style": "margin-top:10px;"},
                         metric_card(
-                            "Total users",
+                            "Total users to date",
                             ui.output_text("users_total"),
                             ui.output_text("overview_total_users_change"),
                         ),
@@ -607,15 +601,15 @@ app_ui = ui.page_fluid(
                     ),
                     ui.tags.div(
                         {"class": "app-panel-grid", "style": "margin-top:10px"},
-                        panel_card("Avg logins per week", ui.output_ui("users_logins_pie")),
-                    ),
-                    ui.tags.div(
-                        {"class": "app-panel-grid", "style": "margin-top:10px"},
                         panel_card("Total and active users per week", ui.output_ui("users_trend")),
                     ),
                     ui.tags.div(
                         {"class": "app-panel-grid", "style": "margin-top:10px"},
-                        panel_card("Logins per week", ui.output_ui("users_frequency")),
+                        panel_card("Avg logins per week", ui.output_ui("users_logins_pie")),
+                    ),
+                    ui.tags.div(
+                        {"class": "app-panel-grid", "style": "margin-top:10px"},
+                        panel_card("Total logins per week", ui.output_ui("users_frequency")),
                     ),
                     ui.tags.div(
                         {"class": "app-table-wrapper"},
@@ -645,23 +639,21 @@ app_ui = ui.page_fluid(
                                 max=data.max_date.date(),
                                 width="100%",
                             ),
-                            ui.input_select(
-                                "tenancy_environment",
-                                "Environment",
-                                choices=data.environment_choices(),
-                                selected="All Environments",
-                                width="100%",
-                            ),
                         ),
+                    ),
+                    ui.tags.p(
+                        "Users with access to multiple tenancies are counted once per tenancy here. Totals across tenancies may double-count, while the users table shows all tenancies for each PID.",
+                        class_="app-muted",
+                        style="margin: -6px 0 6px 0;",
                     ),
                     ui.tags.div(
                         {"class": "app-panel-grid", "style": "margin-bottom:12px; grid-template-columns: 1fr;"},
                         panel_card("Total users", ui.output_ui("tenancy_licence_bars")),
-                        panel_card("Active users (current range)", ui.output_ui("tenancy_active_bars")),
+                        panel_card("Active users", ui.output_ui("tenancy_active_bars")),
                     ),
                     ui.tags.div(
                         {"class": "app-panel-grid", "style": "margin-bottom:12px; grid-template-columns: 1fr;"},
-                        panel_card("Logins (current range)", ui.output_ui("tenancy_logins_bars")),
+                        panel_card("Total logins", ui.output_ui("tenancy_logins_bars")),
                     ),
                     ui.tags.div(
                         {"class": "app-table-wrapper", "style": "margin-top:10px;"},

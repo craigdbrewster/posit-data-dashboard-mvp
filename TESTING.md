@@ -7,7 +7,7 @@
     - New = users whose first login is that day.
     - Active = unique users with a login that day.
     - Inactive = Total – Active.
-  - Switch tenancy/environment filters; all cards/charts/tables should change and remain internally consistent.
+  - Switch tenancy filters; all cards/charts/tables should change and remain internally consistent.
   - Toggle between Connect and Workbench and repeat the single-day check.
 - **CSV spot checks**:
   - Download the Users CSV, pick a PID, and confirm last login and total logins match the JSON for the selected range.
