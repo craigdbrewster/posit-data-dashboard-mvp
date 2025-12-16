@@ -799,6 +799,8 @@ def server(input, output, session):
         out["First login"] = fmt_date(out["First login"])
         out["Last login"] = fmt_date(out["Last login"])
         out["Avg logins\n(per week)"] = (out["Total logins\n(date range)"] / weeks).round(1)
+        # Show tenancies stacked for readability
+        out["Tenancies"] = out["Tenancies"].str.replace(", ", "<br>")
         final_cols = [
             "PID",
             "Tenancies",
@@ -809,7 +811,7 @@ def server(input, output, session):
             "Avg logins\n(per week)",
         ]
         out = out[final_cols]
-        return ui.HTML(out.to_html(index=False, classes="full-table sortable", border=0))
+        return ui.HTML(out.to_html(index=False, classes="full-table sortable", border=0, escape=False))
 
     @output
     @render.download(filename="users.csv")
