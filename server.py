@@ -668,46 +668,50 @@ def server(input, output, session):
     @output
     @render.ui
     def users_trend():
+        start, end = current_period()
         usage = usage_filtered()
         if usage.empty:
             fig = px.line(title="No data for selected period")
             return render_plotly(fig)
 
-        usage = usage.assign(week=usage["last_seen"].dt.to_period("W-MON").dt.start_time)
-        weeks = sorted(usage["week"].unique())
-
-        # Active users per week within the selected window
-        active_weekly = (
-            usage.groupby("week")["user_name"].nunique().reindex(weeks, fill_value=0)
+        # Daily aggregation to keep each date independent (no week roll-up)
+        usage = usage.assign(date=usage["last_seen"].dt.normalize())
+        dates = pd.date_range(
+            start=pd.to_datetime(start).normalize(),
+            end=pd.to_datetime(end).normalize(),
+            freq="D",
         )
 
-        # Cumulative total users up to each week using all history for the filters
+        active_daily = (
+            usage.groupby("date")["user_name"]
+            .nunique()
+            .reindex(dates, fill_value=0)
+        )
+
         base_raw = usage_base()
-        base = base_raw.assign(week=base_raw["last_seen"].dt.to_period("W-MON").dt.start_time)
+        base = base_raw.assign(date=base_raw["last_seen"].dt.normalize())
         cumulative_totals = []
-        for wk in weeks:
-            cutoff = wk + pd.Timedelta(days=6)
-            cumulative_totals.append(
-                base[base["last_seen"] <= cutoff]["user_name"].nunique()
+        for d in dates:
+            cumulative_totals.append(base[base["date"] <= d]["user_name"].nunique())
+
+        df_plot = (
+            pd.DataFrame(
+                {
+                    "date": dates,
+                    "Total users": cumulative_totals,
+                    "Total active users": active_daily.values,
+                }
             )
-
-        df_plot = pd.DataFrame(
-            {
-                "week": weeks,
-                "Total users": cumulative_totals,
-                "Total active users": active_weekly.values,
-            }
+            .melt(id_vars="date", var_name="metric", value_name="value")
         )
-
-        df_plot = df_plot.melt(id_vars="week", var_name="metric", value_name="value")
 
         fig = px.line(
             df_plot,
-            x="week",
+            x="date",
             y="value",
             color="metric",
             markers=True,
-            labels={"week": "Week", "value": "Users", "metric": "Metric"},
+            labels={"date": "Date", "value": "Users", "metric": "Metric"},
         )
         fig.update_layout(legend_title_text="")
         return render_plotly(fig)
@@ -720,32 +724,39 @@ def server(input, output, session):
             fig = px.line(title="No data for selected period")
             return render_plotly(fig)
 
-        usage = usage.assign(week=usage["last_seen"].dt.to_period("W-MON").dt.start_time)
-        df_weekly = (
-            usage.groupby("week")
-            .agg(
-                total_logins=("logins", "sum"),
-            )
+        # Daily logins to mirror the per-day trend chart
+        usage = usage.assign(date=usage["last_seen"].dt.normalize())
+        start, end = current_period()
+        dates = pd.date_range(
+            start=pd.to_datetime(start).normalize(),
+            end=pd.to_datetime(end).normalize(),
+            freq="D",
+        )
+        df_daily = (
+            usage.groupby("date")
+            .agg(total_logins=("logins", "sum"))
+            .reindex(dates, fill_value=0)
             .reset_index()
+            .rename(columns={"index": "date"})
         )
 
-        plot_df = df_weekly.melt(
-            id_vars=["week"],
+        plot_df = df_daily.melt(
+            id_vars=["date"],
             value_vars=["total_logins"],
             var_name="metric",
             value_name="value",
         )
         plot_df["metric"] = plot_df["metric"].map(
-            {"total_logins": "Logins per week"}
+            {"total_logins": "Logins per day"}
         )
 
         fig = px.line(
             plot_df,
-            x="week",
+            x="date",
             y="value",
             color="metric",
             markers=True,
-            labels={"week": "Week", "value": "Weekly total", "metric": "Metric"},
+            labels={"date": "Date", "value": "Daily total", "metric": "Metric"},
         )
         fig.update_layout(legend_title_text="")
         return render_plotly(fig)
@@ -777,10 +788,9 @@ def server(input, output, session):
                 "Total logins\n(to date)",
                 "Avg logins\n(per week)",
             ]
-            empty_df = pd.DataFrame(
-                columns=cols
-            )
-            return ui.HTML(empty_df.to_html(index=False, classes="full-table sortable", border=0))
+            cols = [c.replace("\n", "<br>") for c in cols]
+            empty_df = pd.DataFrame(columns=cols)
+            return ui.HTML(empty_df.to_html(index=False, classes="full-table sortable", border=0, escape=False))
 
         df = df.sort_values("lastLogin", ascending=False)
         base_cols = ["userId", "tenancy", "firstLogin", "lastLogin", "loginCount"]
@@ -811,6 +821,7 @@ def server(input, output, session):
             "Avg logins\n(per week)",
         ]
         out = out[final_cols]
+        out.columns = [c.replace("\n", "<br>") for c in out.columns]
         return ui.HTML(out.to_html(index=False, classes="full-table sortable", border=0, escape=False))
 
     @output
@@ -1009,14 +1020,16 @@ def server(input, output, session):
     @output
     @render.ui
     def tenancies_table_connect():
-        df = _tenancy_component_table("Connect")
-        return ui.HTML(df.to_html(index=False, classes="full-table sortable", border=0))
+        df = _tenancy_component_table("Connect").copy()
+        df.columns = [c.replace(" (", "<br>(") for c in df.columns]
+        return ui.HTML(df.to_html(index=False, classes="full-table sortable", border=0, escape=False))
 
     @output
     @render.ui
     def tenancies_table_workbench():
-        df = _tenancy_component_table("Workbench")
-        return ui.HTML(df.to_html(index=False, classes="full-table sortable", border=0))
+        df = _tenancy_component_table("Workbench").copy()
+        df.columns = [c.replace(" (", "<br>(") for c in df.columns]
+        return ui.HTML(df.to_html(index=False, classes="full-table sortable", border=0, escape=False))
 
     @output
     @render.download(filename="tenancies.csv")
@@ -1029,6 +1042,26 @@ def server(input, output, session):
 
         def _writer():
             return combined.to_csv(index=False)
+        return _writer
+
+    @output
+    @render.download(filename="tenancies_connect.csv")
+    def download_tenancies_connect():
+        df = _tenancy_component_table("Connect")
+
+        def _writer():
+            return df.to_csv(index=False)
+
+        return _writer
+
+    @output
+    @render.download(filename="tenancies_workbench.csv")
+    def download_tenancies_workbench():
+        df = _tenancy_component_table("Workbench")
+
+        def _writer():
+            return df.to_csv(index=False)
+
         return _writer
 
 
